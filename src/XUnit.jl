@@ -95,6 +95,31 @@ function AsyncTestCase(
     return instance
 end
 
+function clear_test_reports!(testsuite::AsyncTestSuite)
+    rich_ts = testsuite.testset_report
+    rich_ts.reporting_test_set[] = ReportingTestSet(rich_ts.description)
+
+    clear_test_reports!.(testsuite.sub_testsuites)
+    clear_test_reports!.(testsuite.sub_testcases)
+end
+
+function clear_test_reports!(testcase::AsyncTestCase)
+    rich_ts = testcase.testset_report
+    clear_test_reports!.(testsuite.sub_testsuites)
+    clear_test_reports!.(testsuite.sub_testcases)
+    rich_ts.reporting_test_set[] = ReportingTestSet(rich_ts.description)
+end
+
+const TEST_SUITE_HOOK_FUNCTION_PARAMETER_NAMES = (
+    Expr(:quote, :before_each),
+    Expr(:quote, :after_each),
+)
+
+const TEST_CASE_HOOK_FUNCTION_PARAMETER_NAMES = (
+    Expr(:quote, :before),
+    Expr(:quote, :after),
+)
+
 include("test_runners.jl")
 include("rich-reporting-testset.jl")
 include("test_filter.jl")
@@ -159,34 +184,6 @@ macro testsuite(args...)
 
     return testsuite_beginend(args, tests, __source__, TestSuiteType)
 end
-
-
-function clear_test_reports!(testsuite::AsyncTestSuite)
-    rich_ts = testsuite.testset_report
-    rich_ts.reporting_test_set[] = ReportingTestSet(rich_ts.description)
-
-    clear_test_reports!.(testsuite.sub_testsuites)
-    clear_test_reports!.(testsuite.sub_testcases)
-end
-
-function clear_test_reports!(testcase::AsyncTestCase)
-    rich_ts = testcase.testset_report
-    clear_test_reports!.(testsuite.sub_testsuites)
-    clear_test_reports!.(testsuite.sub_testcases)
-    rich_ts.reporting_test_set[] = ReportingTestSet(rich_ts.description)
-end
-
-const TEST_SUITE_HOOK_FUNCTION_PARAMETER_NAMES = (
-    # Expr(:quote, :before_all),
-    Expr(:quote, :before_each),
-    Expr(:quote, :after_each),
-    # Expr(:quote, :after_all),
-)
-
-const TEST_CASE_HOOK_FUNCTION_PARAMETER_NAMES = (
-    Expr(:quote, :before),
-    Expr(:quote, :after),
-)
 
 @enum SuiteType TestSuiteType TestCaseType TestSetType
 
@@ -268,7 +265,6 @@ end
 
 function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_options; is_testcase::Bool = false)
     quote
-
         ts = get_testset()
 
         tls = task_local_storage()
