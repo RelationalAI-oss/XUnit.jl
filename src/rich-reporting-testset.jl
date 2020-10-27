@@ -1,3 +1,5 @@
+# RichReportingTestSet extends ReportingTestSet with providing richer
+# test output for XUnit
 mutable struct RichReportingTestSet <: Test.AbstractTestSet
     reporting_test_set::Ref{Option{ReportingTestSet}}
     flattened_reporting_test_set::Ref{Option{ReportingTestSet}}
@@ -80,17 +82,30 @@ function test_err_io()
     ts.err_buff
 end
 
+# Gathers per-test output. Should be used instead of `println` if you want to gather any
+# output without worrying about multi-threaded execution of tests.
 function test_print(input...)
     print(test_out_io(), input...)
 end
 
+# Gathers per-test output. Should be used instead of `print` if you want to gather any
+# output without worrying about multi-threaded execution of tests.
 function test_println(input...)
     println(test_out_io(), input...)
 end
 
-
 include("to_xml.jl")
 
+"""
+    html_report!(
+        rich_ts::RichReportingTestSet;
+        show_stdout::Bool=Test.TESTSET_PRINT_ENABLE[],
+    )
+
+Generates an HTML file output for the given testset.
+
+If `show_stdout` is `true`, then it also prints the test output in the standard output.
+"""
 function html_report!(
     rich_ts::RichReportingTestSet;
     show_stdout::Bool=Test.TESTSET_PRINT_ENABLE[],
@@ -105,6 +120,16 @@ function html_report!(
     return rich_ts
 end
 
+"""
+    function xml_report!(
+        rich_ts::RichReportingTestSet;
+        show_stdout::Bool=Test.TESTSET_PRINT_ENABLE[],
+    )
+
+Generates an xUnit/JUnit-style XML file output for the given testset.
+
+If `show_stdout` is `true`, then it also prints the test output in the standard output.
+"""
 function xml_report!(
     rich_ts::RichReportingTestSet;
     show_stdout::Bool=Test.TESTSET_PRINT_ENABLE[],
