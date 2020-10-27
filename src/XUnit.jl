@@ -10,6 +10,8 @@ using EzXML
 
 const Option{T} = Union{Nothing,T}
 
+# BEGIN AsyncTestSuite and AsyncTestCase
+
 struct AsyncTestCase
     testset_report::AbstractTestSet
     parent_testsuite#::Option{AsyncTestSuiteOrTestCase}
@@ -179,9 +181,13 @@ function TestReports.display_reporting_testset(testsuite::AsyncTestSuite)
     TestReports.display_reporting_testset(testsuite.testset_report)
 end
 
+# END AsyncTestSuite and AsyncTestCase
+
 include("test_runners.jl")
 include("rich-reporting-testset.jl")
 include("test_filter.jl")
+
+# BEGIN XUnitState
 
 """
 State maintained during a test run, consisting of a stack of strings
@@ -233,6 +239,9 @@ function finalize_testy_state(tls, added_tls)
     added_tls && delete!(tls, :__TESTY_STATE__)
 end
 
+# END XUnitState
+
+# Enumeration of all possible macro types
 @enum SuiteType TestSuiteType TestCaseType TestSetType
 
 # BEGIN TestSuite
@@ -510,6 +519,37 @@ end
 
 # END TestSet
 
+# BEGIN Overloading Base.Test functions
+
+# We do not want to print all non-relevant stack-trace related to `XUnit` or Julia internals
+# This function overload handles this scrubbing and stacktrace cleanup
+function Test.scrub_backtrace(bt::Vector)
+    do_test_ind = findfirst(ip -> Test.ip_has_file_and_func(ip, joinpath(@__DIR__, "rich-reporting-testset.jl"), (:display_reporting_testset,)), bt)
+    if do_test_ind !== nothing && length(bt) > do_test_ind
+        bt = bt[do_test_ind + 1:end]
+    end
+    name_ind = findfirst(ip -> Test.ip_has_file_and_func(ip, @__FILE__, (Symbol("macro expansion"),)), bt)
+    if name_ind !== nothing && length(bt) != 0
+        bt = bt[1:name_ind]
+    end
+    return bt
+end
+
+function Test.record(ts::Test.DefaultTestSet, t::Fail)
+    if Test.myid() == 1
+        printstyled(ts.description, ": ", color=:white)
+        # don't print for interrupted tests
+        if t.test_type !== :test_interrupted
+            print(t)
+            println()
+        end
+    end
+    push!(ts.results, t)
+    t, backtrace()
+end
+
+# END Overloading Base.Test functions
+
 function runtests(fun::Function, depth::Int64=typemax(Int64), args...)
     includes = []
     excludes = ["(?!)"]     # seed with an unsatisfiable regex
@@ -577,33 +617,6 @@ function runtests(depth::Int, args...)
         return
     end
     runtests(testfile, depth, args...)
-end
-
-# We do not want to print all non-relevant stack-trace related to `XUnit` or Julia internals
-# This function overload handles this scrubbing and stacktrace cleanup
-function Test.scrub_backtrace(bt::Vector)
-    do_test_ind = findfirst(ip -> Test.ip_has_file_and_func(ip, joinpath(@__DIR__, "rich-reporting-testset.jl"), (:display_reporting_testset,)), bt)
-    if do_test_ind !== nothing && length(bt) > do_test_ind
-        bt = bt[do_test_ind + 1:end]
-    end
-    name_ind = findfirst(ip -> Test.ip_has_file_and_func(ip, @__FILE__, (Symbol("macro expansion"),)), bt)
-    if name_ind !== nothing && length(bt) != 0
-        bt = bt[1:name_ind]
-    end
-    return bt
-end
-
-function Test.record(ts::Test.DefaultTestSet, t::Fail)
-    if Test.myid() == 1
-        printstyled(ts.description, ": ", color=:white)
-        # don't print for interrupted tests
-        if t.test_type !== :test_interrupted
-            print(t)
-            println()
-        end
-    end
-    push!(ts.results, t)
-    t, backtrace()
 end
 
 export RichReportingTestSet, html_output, html_report!, xml_output, xml_report!
