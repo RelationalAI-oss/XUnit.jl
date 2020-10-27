@@ -156,68 +156,6 @@ const TEST_CASE_HOOK_FUNCTION_PARAMETER_NAMES = (
     Expr(:quote, :after),
 )
 
-function run_single_testcase(
-    parent_testsets::Vector{AsyncTestSuite},
-    sub_testcase::AsyncTestCase
-)
-    parents_with_this = vcat(parent_testsets, [sub_testcase])
-    tls = task_local_storage()
-
-    # Testcases cannot be nested underneath each other.
-    # Even if they are nested, the nested testcases are considered like testsets
-    # (i.e., those are not scheduled for running and will run immediately as part of their
-    # parent testcase)
-    @assert !haskey(tls, :__TESTCASE_IS_RUNNING__)
-    tls[:__TESTCASE_IS_RUNNING__] = sub_testcase
-
-    added_tls, rs = initialize_testy_state(tls)
-
-    # start from an empty stack
-    # this will have help with having proper indentation if a `@testset` appears under a `@testcase`
-    empty!(rs.stack)
-    for testsuite in parents_with_this
-        ts = testsuite.testset_report
-        push!(rs.stack, ts.description)
-        push!(rs.test_suites_stack, testsuite)
-        Test.push_testset(ts)
-    end
-
-    # we reproduce the logic of guardseed, but this function
-    # cannot be used as it changes slightly the semantic of @testset,
-    # by wrapping the body in a function
-    local RNG = Random.default_rng()
-    local oldrng = copy(RNG)
-    try
-        # RNG is re-seeded with its own seed to ease reproduce a failed test
-        Random.seed!(RNG.seed)
-
-        for testsuite in parent_testsets
-            testsuite.before_each_hook()
-        end
-        sub_testcase.before_hook()
-        sub_testcase.test_fn()
-        sub_testcase.after_hook()
-        for testsuite in reverse(parent_testsets)
-            testsuite.after_each_hook()
-        end
-    catch err
-        err isa InterruptException && rethrow()
-        # something in the test block threw an error. Count that as an
-        # error in this test set
-        ts = sub_testcase.testset_report
-        Test.record(ts, Test.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), sub_testcase.source))
-    finally
-        copy!(RNG, oldrng)
-        for ts in parents_with_this
-            Test.pop_testset()
-            pop!(rs.test_suites_stack)
-        end
-        close_testset(rs)
-        finalize_testy_state(tls, added_tls)
-        delete!(tls, :__TESTCASE_IS_RUNNING__)
-    end
-end
-
 html_output(testsuite::AsyncTestSuite) = html_output(testsuite.testset_report)
 html_output(testcase::AsyncTestCase) = html_output(testcase.testset_report)
 xml_output(testsuite::AsyncTestSuite) = xml_output(testsuite.testset_report)
