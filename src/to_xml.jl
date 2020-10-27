@@ -133,12 +133,13 @@ function TestReports.report(ts_rich::RichReportingTestSet)
     end
 
     xdoc = XMLDocument()
-    root = setroot!(xdoc, testsuites_xml(ts_rich.description,
-                                         "_id_",
-                                         total_ntests,
-                                         total_nfails,
-                                         total_nerrors,
-                                         x_testsuites))
+    root = setroot!(xdoc, testsuites_xml(
+        ts_rich.description,
+        "_id_",
+        total_ntests,
+        total_nfails,
+        total_nerrors,
+        x_testsuites))
 
     xdoc
 end

@@ -16,7 +16,6 @@ function run_testsuite(
     return _finalize_reports(testsuite)
 end
 
-
 function _run_testsuite(
     ::Type{T},
     testsuite::AsyncTestSuite,
@@ -115,7 +114,6 @@ function _run_scheduled_tests(
         end
     end
 end
-
 
 function _run_testsuite(
     ::Type{SequentialTestRunner},
