@@ -26,12 +26,10 @@ end
 struct AsyncTestSuite
     testset_report::AbstractTestSet
     parent_testsuite#::Option{AsyncTestSuiteOrTestCase}
-    before_all_hook::Function
     before_each_hook::Function
     sub_testsuites::Vector{AsyncTestSuite}
     sub_testcases::Vector{AsyncTestCase}
     after_each_hook::Function
-    after_all_hook::Function
     disabled::Bool
     modify_lock::ReentrantLock
     source::LineNumberNode
@@ -43,23 +41,19 @@ function AsyncTestSuite(
     testset_report::AbstractTestSet,
     source::LineNumberNode,
     parent_testsuite::Option{AsyncTestSuiteOrTestCase}=nothing;
-    before_all::Function = () -> nothing,
     before_each::Function = () -> nothing,
     sub_testsuites::Vector{AsyncTestSuite} = AsyncTestSuite[],
     sub_testcases::Vector{AsyncTestSuite} = AsyncTestSuite[],
     after_each::Function = () -> nothing,
-    after_all::Function = () -> nothing,
     disabled::Bool = false,
 )
     instance = AsyncTestSuite(
         testset_report,
         parent_testsuite,
-        before_all,
         before_each,
         sub_testsuites,
         sub_testcases,
         after_each,
-        after_all,
         disabled,
         ReentrantLock(),
         source,
