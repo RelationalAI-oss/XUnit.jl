@@ -16,15 +16,13 @@ extra_param_value = "extra_p"
 
 before_each_fn_gen(fn_name, extra_param=extra_param_value) = () -> println("         >>>> before_each -> $fn_name, $extra_param, $global_param")
 after_each_fn_gen(fn_name, extra_param=extra_param_value) = () -> println("         >>>> after_each -> $fn_name, $extra_param, $global_param")
-before_fn_gen(fn_name, extra_param=extra_param_value) = () -> println("         >>>> before -> $fn_name, $extra_param, $global_param")
-after_fn_gen(fn_name, extra_param=extra_param_value) = () -> println("         >>>> after -> $fn_name, $extra_param, $global_param")
 
 function schedule_tests()
     topname = "ABC"
     bottomname = "XYZ"
     @testsuite "Top XParent $topname" begin
         @testset "XTest 1" before_each=before_each_fn_gen("Child XTest 1") begin
-            @testcase "Child XTest 1 $bottomname" before=before_fn_gen("Child XTest 1") begin
+            @testcase "Child XTest 1 $bottomname" begin
                 @test 1 == 1
                 @test 2 == 2
                 @test 3 == 3

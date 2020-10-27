@@ -195,9 +195,7 @@ function run_single_testcase(
         for testsuite in parent_testsets
             testsuite.before_each_hook()
         end
-        sub_testcase.before_hook()
         sub_testcase.test_fn()
-        sub_testcase.after_hook()
         for testsuite in reverse(parent_testsets)
             testsuite.after_each_hook()
         end

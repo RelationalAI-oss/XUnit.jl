@@ -18,8 +18,6 @@ struct AsyncTestCase
     test_fn::Function
     source::LineNumberNode
     disabled::Bool
-    before_hook::Function
-    after_hook::Function
     sub_testsuites::Vector#{AsyncTestSuite}
     sub_testcases::Vector{AsyncTestCase}
     modify_lock::ReentrantLock
@@ -74,8 +72,6 @@ function AsyncTestCase(
     parent_testsuite::Option{AsyncTestSuiteOrTestCase},
     source::LineNumberNode;
     disabled::Bool=false,
-    before::Function = () -> nothing,
-    after::Function = () -> nothing,
 )
     instance = AsyncTestCase(
         testset_report,
@@ -83,8 +79,6 @@ function AsyncTestCase(
         test_fn,
         source,
         disabled,
-        before,
-        after,
         AsyncTestSuite[],
         AsyncTestCase[],
         ReentrantLock(),
@@ -151,11 +145,6 @@ end
 const TEST_SUITE_HOOK_FUNCTION_PARAMETER_NAMES = (
     Expr(:quote, :before_each),
     Expr(:quote, :after_each),
-)
-
-const TEST_CASE_HOOK_FUNCTION_PARAMETER_NAMES = (
-    Expr(:quote, :before),
-    Expr(:quote, :after),
 )
 
 html_output(testsuite::AsyncTestSuite) = html_output(testsuite.testset_report)
@@ -258,6 +247,10 @@ Also, note that the body of a `@testsuite` always gets executed at scheduling ti
 needs to gather possible underlying `@testcase`s. Thus, it's a good practice to put your
 tests under a `@testcase` (instead of putting them under a `@testsuite`), as all the tests
 defined under a `@testsuite` are executed sequentially at scheduling time.
+
+`@testsuite` takes two additional parameters:
+  - `beofre_each`: a function to run before each underlying test-case
+  - `after_each`: a function to run after each underlying test-case
 """
 macro testsuite(args...)
     isempty(args) && error("No arguments to @testsuite")
@@ -284,10 +277,7 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
     function filter_hooks_fn(a)
         a.head == :call &&
         a.args[1] == :(=>) &&
-        (
-            (a.args[2] in TEST_CASE_HOOK_FUNCTION_PARAMETER_NAMES && is_testcase) ||
-            (a.args[2] in TEST_SUITE_HOOK_FUNCTION_PARAMETER_NAMES && !is_testcase)
-        )
+        (a.args[2] in TEST_SUITE_HOOK_FUNCTION_PARAMETER_NAMES && !is_testcase)
     end
 
     # separate hook functions from other params
@@ -425,9 +415,9 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                                 try
                                     # a test-case that is under another test-case is treated
                                     # like a testset and runs immediately
-                                    testcase_obj.before_hook()
+                                    # Note: `before_each` and `after_each` hooks are already
+                                    # ran for the top-most test-case and won't run again
                                     testcase_obj.test_fn()
-                                    testcase_obj.after_hook()
                                 catch err
                                     err isa InterruptException && rethrow()
                                     # something in the test block threw an error. Count that as an
