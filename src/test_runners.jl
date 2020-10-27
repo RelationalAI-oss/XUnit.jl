@@ -71,12 +71,12 @@ function _run_scheduled_tests(
 ) where T <: TestRunner
     for st in scheduled_tests
         if Test.TESTSET_PRINT_ENABLE[]
-            path = get_path(vcat(st.parent_testsets, [st.target_testcase]))
+            path = _get_path(vcat(st.parent_testsets, [st.target_testcase]))
             print("* Running ")
             printstyled(path; bold=true)
             println(" test-case...")
         end
-        _run_single_testcase(st.parent_testsets, st.target_testcase)
+        run_single_testcase(st.parent_testsets, st.target_testcase)
     end
 end
 
@@ -102,7 +102,7 @@ function _run_scheduled_tests(
 
             st = scheduled_tests[i]
             if Test.TESTSET_PRINT_ENABLE[]
-                path = get_path(vcat(st.parent_testsets, [st.target_testcase]))
+                path = _get_path(vcat(st.parent_testsets, [st.target_testcase]))
                 std_io = IOBuffer()
                 print(std_io, "-> Running ")
                 printstyled(std_io, path; bold=true)
@@ -111,7 +111,7 @@ function _run_scheduled_tests(
                 # thread-safe print
                 print(read(std_io, String))
             end
-            _run_single_testcase(st.parent_testsets, st.target_testcase)
+            run_single_testcase(st.parent_testsets, st.target_testcase)
         end
     end
 end
@@ -123,7 +123,7 @@ function _run_testsuite(
     parent_testsets::Vector{AsyncTestSuite}=AsyncTestSuite[]
 )
     parent_testsets = vcat(parent_testsets, [testsuite])
-    suite_path = get_path(parent_testsets)
+    suite_path = _get_path(parent_testsets)
     if !testsuite.disabled
         if Test.TESTSET_PRINT_ENABLE[]
             print("Running ")
@@ -141,14 +141,14 @@ function _run_testsuite(
             if Test.TESTSET_PRINT_ENABLE[]
                 print("  "^length(parent_testsets))
             end
-            path = get_path(vcat(parent_testsets, [sub_testcase]))
+            path = _get_path(vcat(parent_testsets, [sub_testcase]))
             if !sub_testcase.disabled
                 if Test.TESTSET_PRINT_ENABLE[]
                     print("Running ")
                     printstyled(path; bold=true)
                     println(" test-case...")
                 end
-                _run_single_testcase(parent_testsets, sub_testcase)
+                run_single_testcase(parent_testsets, sub_testcase)
             elseif Test.TESTSET_PRINT_ENABLE[]
                 printstyled("Skipping $path test-case...\n"; color=:light_black)
             end
@@ -157,4 +157,8 @@ function _run_testsuite(
         printstyled("Skipping $suite_path test-suite...\n"; color=:light_black)
     end
     return testsuite
+end
+
+function _get_path(testsuite_stack)
+    join(map(testsuite -> testsuite.testset_report.description, testsuite_stack), "/")
 end

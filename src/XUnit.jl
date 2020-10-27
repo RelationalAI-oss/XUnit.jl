@@ -110,6 +110,42 @@ function clear_test_reports!(testcase::AsyncTestCase)
     rich_ts.reporting_test_set[] = ReportingTestSet(rich_ts.description)
 end
 
+function _finalize_reports(testsuite::TEST_SUITE)::TEST_SUITE where TEST_SUITE <: AsyncTestSuite
+    Test.push_testset(testsuite.testset_report)
+    try
+        for sub_testsuite in testsuite.sub_testsuites
+            _finalize_reports(sub_testsuite)
+        end
+
+        for sub_testcase in testsuite.sub_testcases
+            _finalize_reports(sub_testcase)
+        end
+    finally
+        Test.pop_testset()
+    end
+
+    Test.finish(testsuite.testset_report)
+    return testsuite
+end
+
+function _finalize_reports(testcase::TEST_CASE)::TEST_CASE where TEST_CASE <: AsyncTestCase
+    Test.push_testset(testcase.testset_report)
+    try
+        for sub_testsuite in testcase.sub_testsuites
+            _finalize_reports(sub_testsuite)
+        end
+
+        for sub_testcase in testcase.sub_testcases
+            _finalize_reports(sub_testcase)
+        end
+    finally
+        Test.pop_testset()
+    end
+
+    Test.finish(testcase.testset_report)
+    return testcase
+end
+
 const TEST_SUITE_HOOK_FUNCTION_PARAMETER_NAMES = (
     Expr(:quote, :before_each),
     Expr(:quote, :after_each),
@@ -119,6 +155,91 @@ const TEST_CASE_HOOK_FUNCTION_PARAMETER_NAMES = (
     Expr(:quote, :before),
     Expr(:quote, :after),
 )
+
+function run_single_testcase(
+    parent_testsets::Vector{AsyncTestSuite},
+    sub_testcase::AsyncTestCase
+)
+    parents_with_this = vcat(parent_testsets, [sub_testcase])
+    tls = task_local_storage()
+
+    # Testcases cannot be nested underneath each other.
+    # Even if they are nested, the nested testcases are considered like testsets
+    # (i.e., those are not scheduled for running and will run immediately as part of their
+    # parent testcase)
+    @assert !haskey(tls, :__TESTCASE_IS_RUNNING__)
+    tls[:__TESTCASE_IS_RUNNING__] = sub_testcase
+
+    added_tls, rs = initialize_testy_state(tls)
+
+    # start from an empty stack
+    # this will have help with having proper indentation if a `@testset` appears under a `@testcase`
+    empty!(rs.stack)
+    for testsuite in parents_with_this
+        ts = testsuite.testset_report
+        push!(rs.stack, ts.description)
+        push!(rs.test_suites_stack, testsuite)
+        Test.push_testset(ts)
+    end
+
+    # we reproduce the logic of guardseed, but this function
+    # cannot be used as it changes slightly the semantic of @testset,
+    # by wrapping the body in a function
+    local RNG = Random.default_rng()
+    local oldrng = copy(RNG)
+    try
+        # RNG is re-seeded with its own seed to ease reproduce a failed test
+        Random.seed!(RNG.seed)
+
+        for testsuite in parent_testsets
+            testsuite.before_each_hook()
+        end
+        sub_testcase.before_hook()
+        sub_testcase.test_fn()
+        sub_testcase.after_hook()
+        for testsuite in reverse(parent_testsets)
+            testsuite.after_each_hook()
+        end
+    catch err
+        err isa InterruptException && rethrow()
+        # something in the test block threw an error. Count that as an
+        # error in this test set
+        ts = sub_testcase.testset_report
+        Test.record(ts, Test.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), sub_testcase.source))
+    finally
+        copy!(RNG, oldrng)
+        for ts in parents_with_this
+            Test.pop_testset()
+            pop!(rs.test_suites_stack)
+        end
+        close_testset(rs)
+        finalize_testy_state(tls, added_tls)
+        delete!(tls, :__TESTCASE_IS_RUNNING__)
+    end
+end
+
+html_output(testsuite::AsyncTestSuite) = html_output(testsuite.testset_report)
+html_output(testcase::AsyncTestCase) = html_output(testcase.testset_report)
+xml_output(testsuite::AsyncTestSuite) = xml_output(testsuite.testset_report)
+xml_output(testcase::AsyncTestCase) = xml_output(testcase.testset_report)
+
+function html_report!(
+    testsuite::AsyncTestSuite;
+    show_stdout::Bool=Test.TESTSET_PRINT_ENABLE[],
+)
+    return html_report!(testsuite.testset_report; show_stdout=show_stdout)
+end
+
+function xml_report!(
+    testsuite::AsyncTestSuite;
+    show_stdout::Bool=Test.TESTSET_PRINT_ENABLE[],
+)
+    return xml_report!(testsuite.testset_report; show_stdout=show_stdout)
+end
+
+function TestReports.display_reporting_testset(testsuite::AsyncTestSuite)
+    TestReports.display_reporting_testset(testsuite.testset_report)
+end
 
 include("test_runners.jl")
 include("rich-reporting-testset.jl")
@@ -157,6 +278,25 @@ XUnitState() = XUnitState([], [], typemax(Int64), ⊤, ⊥, Dict{String,Bool}())
 XUnitState(maxdepth::Int, include::Regex, exclude::Regex) =
    XUnitState([], [], maxdepth, include, exclude, Dict{String,Bool}())
 
+function initialize_testy_state(tls)
+    added_tls = false
+    rs = if haskey(tls, :__TESTY_STATE__)
+        tls[:__TESTY_STATE__]
+    else
+        added_tls = true
+        val = XUnitState()
+        tls[:__TESTY_STATE__] = val
+        val
+    end
+    return added_tls, rs
+end
+
+function finalize_testy_state(tls, added_tls)
+    added_tls && delete!(tls, :__TESTY_STATE__)
+end
+
+@enum SuiteType TestSuiteType TestCaseType TestSetType
+
 # BEGIN TestSuite
 
 """
@@ -184,8 +324,6 @@ macro testsuite(args...)
 
     return testsuite_beginend(args, tests, __source__, TestSuiteType)
 end
-
-@enum SuiteType TestSuiteType TestCaseType TestSetType
 
 """
 Generate the code for a `@testsuite` with a `begin`/`end` argument
@@ -372,125 +510,6 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
     end
 end
 
-function get_path(testsuite_stack)
-    join(map(testsuite -> testsuite.testset_report.description, testsuite_stack), "/")
-end
-
-function _finalize_reports(testsuite::TEST_SUITE)::TEST_SUITE where TEST_SUITE <: AsyncTestSuite
-    Test.push_testset(testsuite.testset_report)
-    try
-        for sub_testsuite in testsuite.sub_testsuites
-            _finalize_reports(sub_testsuite)
-        end
-
-        for sub_testcase in testsuite.sub_testcases
-            _finalize_reports(sub_testcase)
-        end
-    finally
-        Test.pop_testset()
-    end
-
-    Test.finish(testsuite.testset_report)
-    return testsuite
-end
-
-function _finalize_reports(testcase::TEST_CASE)::TEST_CASE where TEST_CASE <: AsyncTestCase
-    Test.push_testset(testcase.testset_report)
-    try
-        for sub_testsuite in testcase.sub_testsuites
-            _finalize_reports(sub_testsuite)
-        end
-
-        for sub_testcase in testcase.sub_testcases
-            _finalize_reports(sub_testcase)
-        end
-    finally
-        Test.pop_testset()
-    end
-
-    Test.finish(testcase.testset_report)
-    return testcase
-end
-
-function _run_single_testcase(
-    parent_testsets::Vector{AsyncTestSuite},
-    sub_testcase::AsyncTestCase
-)
-    parents_with_this = vcat(parent_testsets, [sub_testcase])
-    tls = task_local_storage()
-
-    # Testcases cannot be nested underneath each other.
-    # Even if they are nested, the nested testcases are considered like testsets
-    # (i.e., those are not scheduled for running and will run immediately as part of their
-    # parent testcase)
-    @assert !haskey(tls, :__TESTCASE_IS_RUNNING__)
-    tls[:__TESTCASE_IS_RUNNING__] = sub_testcase
-
-    added_tls, rs = initialize_testy_state(tls)
-
-    # start from an empty stack
-    # this will have help with having proper indentation if a `@testset` appears under a `@testcase`
-    empty!(rs.stack)
-    for testsuite in parents_with_this
-        ts = testsuite.testset_report
-        push!(rs.stack, ts.description)
-        push!(rs.test_suites_stack, testsuite)
-        Test.push_testset(ts)
-    end
-
-    # we reproduce the logic of guardseed, but this function
-    # cannot be used as it changes slightly the semantic of @testset,
-    # by wrapping the body in a function
-    local RNG = Random.default_rng()
-    local oldrng = copy(RNG)
-    try
-        # RNG is re-seeded with its own seed to ease reproduce a failed test
-        Random.seed!(RNG.seed)
-
-        for testsuite in parent_testsets
-            testsuite.before_each_hook()
-        end
-        sub_testcase.before_hook()
-        sub_testcase.test_fn()
-        sub_testcase.after_hook()
-        for testsuite in reverse(parent_testsets)
-            testsuite.after_each_hook()
-        end
-    catch err
-        err isa InterruptException && rethrow()
-        # something in the test block threw an error. Count that as an
-        # error in this test set
-        ts = sub_testcase.testset_report
-        Test.record(ts, Test.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), sub_testcase.source))
-    finally
-        copy!(RNG, oldrng)
-        for ts in parents_with_this
-            Test.pop_testset()
-            pop!(rs.test_suites_stack)
-        end
-        close_testset(rs)
-        finalize_testy_state(tls, added_tls)
-        delete!(tls, :__TESTCASE_IS_RUNNING__)
-    end
-end
-
-function initialize_testy_state(tls)
-    added_tls = false
-    rs = if haskey(tls, :__TESTY_STATE__)
-        tls[:__TESTY_STATE__]
-    else
-        added_tls = true
-        val = XUnitState()
-        tls[:__TESTY_STATE__] = val
-        val
-    end
-    return added_tls, rs
-end
-
-function finalize_testy_state(tls, added_tls)
-    added_tls && delete!(tls, :__TESTY_STATE__)
-end
-
 # END TestSuite
 
 # BEGIN TestCase
@@ -620,29 +639,6 @@ function runtests(depth::Int, args...)
         return
     end
     runtests(testfile, depth, args...)
-end
-
-html_output(testsuite::AsyncTestSuite) = html_output(testsuite.testset_report)
-html_output(testcase::AsyncTestCase) = html_output(testcase.testset_report)
-xml_output(testsuite::AsyncTestSuite) = xml_output(testsuite.testset_report)
-xml_output(testcase::AsyncTestCase) = xml_output(testcase.testset_report)
-
-function html_report!(
-    testsuite::AsyncTestSuite;
-    show_stdout::Bool=Test.TESTSET_PRINT_ENABLE[],
-)
-    return html_report!(testsuite.testset_report; show_stdout=show_stdout)
-end
-
-function xml_report!(
-    testsuite::AsyncTestSuite;
-    show_stdout::Bool=Test.TESTSET_PRINT_ENABLE[],
-)
-    return xml_report!(testsuite.testset_report; show_stdout=show_stdout)
-end
-
-function TestReports.display_reporting_testset(testsuite::AsyncTestSuite)
-    TestReports.display_reporting_testset(testsuite.testset_report)
 end
 
 # We do not want to print all non-relevant stack-trace related to `XUnit` or Julia internals
