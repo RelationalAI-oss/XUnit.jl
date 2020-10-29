@@ -201,6 +201,7 @@ We saw some failures by applying `Base.deepcopy` on `RichReportingTestSet` and
 `ReportingTestSet`. That's why this function is added to have more control over the impl.
 """
 function create_deep_copy end
+create_deep_copy(x) = deepcopy(x)
 
 function create_deep_copy(ts::XUnitState)::XUnitState
     return XUnitState(

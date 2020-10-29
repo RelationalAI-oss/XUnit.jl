@@ -148,6 +148,7 @@ function xml_report!(
     return rich_ts
 end
 
+create_deep_copy(x::Test.Broken) = x
 create_deep_copy(x::Test.Pass) = x
 create_deep_copy(x::Test.Fail) = x
 create_deep_copy(x::Test.Error) = x
