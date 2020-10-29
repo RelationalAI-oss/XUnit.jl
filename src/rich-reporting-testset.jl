@@ -8,23 +8,24 @@ mutable struct RichReportingTestSet <: Test.AbstractTestSet
     html_output::String
     out_buff::IOBuffer
     err_buff::IOBuffer
-    # constructor takes a description string and options keyword arguments
-    function RichReportingTestSet(
-        desc;
-        xml_output::String="test-results.xml",
-        other_args...
+end
+
+# constructor takes a description string and options keyword arguments
+function RichReportingTestSet(
+    desc;
+    xml_output::String="test-results.xml",
+    other_args...
+)
+    html_output = "$xml_output.html"
+    RichReportingTestSet(
+        ReportingTestSet(desc),
+        nothing,
+        desc,
+        xml_output,
+        html_output,
+        IOBuffer(),
+        IOBuffer(),
     )
-        html_output = "$xml_output.html"
-        new(
-            ReportingTestSet(desc),
-            nothing,
-            desc,
-            xml_output,
-            html_output,
-            IOBuffer(),
-            IOBuffer(),
-        )
-    end
 end
 
 function Test.record(rich_ts::RichReportingTestSet, child::AbstractTestSet)
@@ -147,9 +148,34 @@ function xml_report!(
     return rich_ts
 end
 
+create_deep_copy(x::Test.Pass) = x
+create_deep_copy(x::Test.Fail) = x
+create_deep_copy(x::Test.Error) = x
+create_deep_copy(x::Nothing) = x
+
+function create_deep_copy(ts::RichReportingTestSet)::RichReportingTestSet
+    RichReportingTestSet(
+        create_deep_copy(ts.reporting_test_set[]),
+        create_deep_copy(ts.flattened_reporting_test_set[]),
+        ts.description,
+        ts.xml_output,
+        ts.html_output,
+        copy(ts.out_buff),
+        copy(ts.out_buff),
+    )
+end
+
+function create_deep_copy(ts::ReportingTestSet)::ReportingTestSet
+    return ReportingTestSet(
+        ts.description,
+        map(create_deep_copy, ts.results),
+        copy(ts.properties)
+    )
+end
+
 function flatten_results!(rich_ts::RichReportingTestSet)
     if rich_ts.flattened_reporting_test_set[] === nothing
-        rich_ts.flattened_reporting_test_set[] = deepcopy(rich_ts.reporting_test_set[])
+        rich_ts.flattened_reporting_test_set[] = create_deep_copy(rich_ts.reporting_test_set[])
         ts = rich_ts.flattened_reporting_test_set[]
         # Add any top level Results to their own TestSet
         TestReports.handle_top_level_results!(ts)
@@ -166,7 +192,7 @@ end
 Recursively flatten `ts` to a vector of `TestSet`s.
 """
 function _flatten_results!(rich_ts::RichReportingTestSet)::Vector{<:AbstractTestSet}
-    rich_ts.flattened_reporting_test_set[] = deepcopy(rich_ts.reporting_test_set[])
+    rich_ts.flattened_reporting_test_set[] = create_deep_copy(rich_ts.reporting_test_set[])
     ts = rich_ts.flattened_reporting_test_set[]
     original_results = ts.results
     flattened_results = AbstractTestSet[]

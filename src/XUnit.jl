@@ -194,6 +194,25 @@ struct XUnitState
     seen::Dict{String,Bool}
 end
 
+"""
+This function works similar to Base.deepcopy.
+
+We saw some failures by applying `Base.deepcopy` on `RichReportingTestSet` and
+`ReportingTestSet`. That's why this function is added to have more control over the impl.
+"""
+function create_deep_copy end
+
+function create_deep_copy(ts::XUnitState)::XUnitState
+    return XUnitState(
+        map(create_deep_copy, ts.test_suites_stack),
+        copy(ts.stack),
+        ts.maxdepth,
+        ts.include,
+        ts.exclude,
+        copy(ts.seen)
+    )
+end
+
 function open_testset(rs::XUnitState, name::String)
     push!(rs.stack, name)
     join(rs.stack, "/")

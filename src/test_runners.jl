@@ -93,7 +93,7 @@ function _run_scheduled_tests(
     @threads for tid in 1:Threads.nthreads()
         tls = task_local_storage()
         if has_xunit_state
-            tls[:__XUNIT_STATE__] = deepcopy(xunit_state)
+            tls[:__XUNIT_STATE__] = create_deep_copy(xunit_state)
         end
         while true
             i = (Threads.atomic_sub!(scheduled_tests_index, 1))
