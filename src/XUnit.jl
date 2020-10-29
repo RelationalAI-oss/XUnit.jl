@@ -211,21 +211,21 @@ XUnitState() = XUnitState([], [], typemax(Int64), ⊤, ⊥, Dict{String,Bool}())
 XUnitState(maxdepth::Int, include::Regex, exclude::Regex) =
    XUnitState([], [], maxdepth, include, exclude, Dict{String,Bool}())
 
-function initialize_testy_state(tls)
+function initialize_xunit_state(tls)
     added_tls = false
-    rs = if haskey(tls, :__TESTY_STATE__)
-        tls[:__TESTY_STATE__]
+    rs = if haskey(tls, :__XUNIT_STATE__)
+        tls[:__XUNIT_STATE__]
     else
         added_tls = true
         val = XUnitState()
-        tls[:__TESTY_STATE__] = val
+        tls[:__XUNIT_STATE__] = val
         val
     end
     return added_tls, rs
 end
 
-function finalize_testy_state(tls, added_tls)
-    added_tls && delete!(tls, :__TESTY_STATE__)
+function finalize_xunit_state(tls, added_tls)
+    added_tls && delete!(tls, :__XUNIT_STATE__)
 end
 
 # END XUnitState
@@ -343,7 +343,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
         ts = get_testset()
 
         tls = task_local_storage()
-        added_tls, rs = initialize_testy_state(tls)
+        added_tls, rs = initialize_xunit_state(tls)
 
         local testsuite_or_testcase = nothing
 
@@ -439,7 +439,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
         finally
             close_testset(rs)
             if added_tls
-                delete!(tls, :__TESTY_STATE__)
+                delete!(tls, :__XUNIT_STATE__)
             end
         end
 
@@ -553,7 +553,7 @@ function runtests(fun::Function, depth::Int64=typemax(Int64), args...)
     include = partial(join(map(x -> string("(?:", x, ")"), includes), "|"))
     exclude = exact(join(map(x -> string("(?:", x, ")"), excludes), "|"))
     state = XUnitState(depth, include, exclude)
-    task_local_storage(:__TESTY_STATE__, state) do
+    task_local_storage(:__XUNIT_STATE__, state) do
         fun()
     end
     state

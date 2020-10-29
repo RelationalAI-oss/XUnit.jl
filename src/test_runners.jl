@@ -87,13 +87,13 @@ function _run_scheduled_tests(
 
     # make sure to pass the test-state to the underlying threads (mostly for test filtering)
     parent_thread_tls = task_local_storage()
-    has_testy_state = haskey(parent_thread_tls, :__TESTY_STATE__)
-    testy_state = has_testy_state ? parent_thread_tls[:__TESTY_STATE__] : nothing
+    has_xunit_state = haskey(parent_thread_tls, :__XUNIT_STATE__)
+    xunit_state = has_xunit_state ? parent_thread_tls[:__XUNIT_STATE__] : nothing
 
     @threads for tid in 1:Threads.nthreads()
         tls = task_local_storage()
-        if has_testy_state
-            tls[:__TESTY_STATE__] = deepcopy(testy_state)
+        if has_xunit_state
+            tls[:__XUNIT_STATE__] = deepcopy(xunit_state)
         end
         while true
             i = (Threads.atomic_sub!(scheduled_tests_index, 1))
@@ -171,7 +171,7 @@ function run_single_testcase(
     @assert !haskey(tls, :__TESTCASE_IS_RUNNING__)
     tls[:__TESTCASE_IS_RUNNING__] = sub_testcase
 
-    added_tls, rs = initialize_testy_state(tls)
+    added_tls, rs = initialize_xunit_state(tls)
 
     # start from an empty stack
     # this will have help with having proper indentation if a `@testset` appears under a `@testcase`
@@ -212,7 +212,7 @@ function run_single_testcase(
             pop!(rs.test_suites_stack)
         end
         close_testset(rs)
-        finalize_testy_state(tls, added_tls)
+        finalize_xunit_state(tls, added_tls)
         delete!(tls, :__TESTCASE_IS_RUNNING__)
     end
 end
