@@ -10,7 +10,7 @@ using EzXML
 
 const Option{T} = Union{Nothing,T}
 
-abstract type TestMeasures end
+abstract type TestMetrics end
 
 # BEGIN AsyncTestSuite and AsyncTestCase
 
@@ -23,7 +23,7 @@ struct AsyncTestCase
     sub_testsuites::Vector#{AsyncTestSuite}
     sub_testcases::Vector{AsyncTestCase}
     modify_lock::ReentrantLock
-    measures::Option{TestMeasures}
+    metrics::Option{TestMetrics}
 end
 
 struct AsyncTestSuite
@@ -36,7 +36,7 @@ struct AsyncTestSuite
     disabled::Bool
     modify_lock::ReentrantLock
     source::LineNumberNode
-    measures::Option{TestMeasures}
+    metrics::Option{TestMetrics}
 end
 
 const AsyncTestSuiteOrTestCase = Union{AsyncTestSuite,AsyncTestCase}
@@ -50,9 +50,9 @@ function AsyncTestSuite(
     sub_testcases::Vector{AsyncTestSuite} = AsyncTestSuite[],
     after_each::Function = () -> nothing,
     disabled::Bool = false,
-    measures = nothing,
+    metrics = nothing,
 )
-    measures_instance = create_measures(parent_testsuite, measures)
+    metrics_instance = create_test_metrics(parent_testsuite, metrics)
 
     instance = AsyncTestSuite(
         testset_report,
@@ -64,7 +64,7 @@ function AsyncTestSuite(
         disabled,
         ReentrantLock(),
         source,
-        measures_instance,
+        metrics_instance,
     )
     if parent_testsuite !== nothing
         lock(parent_testsuite.modify_lock) do
@@ -80,9 +80,9 @@ function AsyncTestCase(
     parent_testsuite::Option{AsyncTestSuiteOrTestCase},
     source::LineNumberNode;
     disabled::Bool=false,
-    measures = nothing,
+    metrics = nothing,
 )
-    measures_instance = create_measures(parent_testsuite, measures)
+    metrics_instance = create_test_metrics(parent_testsuite, metrics)
 
     instance = AsyncTestCase(
         testset_report,
@@ -93,7 +93,7 @@ function AsyncTestCase(
         AsyncTestSuite[],
         AsyncTestCase[],
         ReentrantLock(),
-        measures_instance,
+        metrics_instance,
     )
     if parent_testsuite !== nothing
         lock(parent_testsuite.modify_lock) do
@@ -103,7 +103,7 @@ function AsyncTestCase(
     return instance
 end
 
-include("test_measures.jl")
+include("test_metrics.jl")
 
 function clear_test_reports!(testsuite::AsyncTestSuite)
     rich_ts = testsuite.testset_report
@@ -123,11 +123,11 @@ end
 const TEST_SUITE_PARAMETER_NAMES = (
     Expr(:quote, :before_each),
     Expr(:quote, :after_each),
-    Expr(:quote, :measures),
+    Expr(:quote, :metrics),
 )
 
 const TEST_CASE_PARAMETER_NAMES = (
-    Expr(:quote, :measures),
+    Expr(:quote, :metrics),
 )
 
 html_output(testsuite::AsyncTestSuite) = html_output(testsuite.testset_report)
@@ -423,7 +423,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                                     # like a testset and runs immediately
                                     # Note: `before_each` and `after_each` hooks are already
                                     # ran for the top-most test-case and won't run again
-                                    gather_test_measures(testcase_obj)
+                                    gather_test_metrics(testcase_obj)
                                 catch err
                                     err isa InterruptException && rethrow()
                                     # something in the test block threw an error. Count that as an
@@ -643,6 +643,6 @@ export TestSetException
 export get_testset, get_testset_depth, run_testsuite
 export AbstractTestSet, DefaultTestSet, record, finish
 export TestRunner, SequentialTestRunner, ShuffledTestRunner, ParallelTestRunner
-export DefaultTestMeasures
+export DefaultTestMetrics
 
 end

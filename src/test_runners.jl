@@ -14,7 +14,7 @@ function run_testsuite(
 )::TEST_SUITE where {T <: TestRunner, TEST_SUITE <: AsyncTestSuite}
     _run_testsuite(T, testsuite)
     _finalize_reports(testsuite)
-    gather_test_measures(testsuite)
+    gather_test_metrics(testsuite)
     return testsuite
 end
 
@@ -197,7 +197,7 @@ function run_single_testcase(
         for testsuite in parent_testsets
             testsuite.before_each_hook()
         end
-        gather_test_measures(sub_testcase)
+        gather_test_metrics(sub_testcase)
         for testsuite in reverse(parent_testsets)
             testsuite.after_each_hook()
         end
