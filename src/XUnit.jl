@@ -106,42 +106,6 @@ function clear_test_reports!(testcase::AsyncTestCase)
     rich_ts.reporting_test_set[] = ReportingTestSet(rich_ts.description)
 end
 
-function _finalize_reports(testsuite::TEST_SUITE)::TEST_SUITE where TEST_SUITE <: AsyncTestSuite
-    Test.push_testset(testsuite.testset_report)
-    try
-        for sub_testsuite in testsuite.sub_testsuites
-            _finalize_reports(sub_testsuite)
-        end
-
-        for sub_testcase in testsuite.sub_testcases
-            _finalize_reports(sub_testcase)
-        end
-    finally
-        Test.pop_testset()
-    end
-
-    Test.finish(testsuite.testset_report)
-    return testsuite
-end
-
-function _finalize_reports(testcase::TEST_CASE)::TEST_CASE where TEST_CASE <: AsyncTestCase
-    Test.push_testset(testcase.testset_report)
-    try
-        for sub_testsuite in testcase.sub_testsuites
-            _finalize_reports(sub_testsuite)
-        end
-
-        for sub_testcase in testcase.sub_testcases
-            _finalize_reports(sub_testcase)
-        end
-    finally
-        Test.pop_testset()
-    end
-
-    Test.finish(testcase.testset_report)
-    return testcase
-end
-
 const TEST_SUITE_HOOK_FUNCTION_PARAMETER_NAMES = (
     Expr(:quote, :before_each),
     Expr(:quote, :after_each),
