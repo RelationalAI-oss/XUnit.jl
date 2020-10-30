@@ -10,25 +10,27 @@ end
 
 function create_new_measure_instance end
 
-function create_new_measure_instance(::T) where T <: TestMetrics
-    create_new_measure_instance(T)
+function create_new_measure_instance(::T; explicit::Bool) where T <: TestMetrics
+    create_new_measure_instance(T; explicit=explicit)
 end
 
-function create_new_measure_instance(::Type{T}) where T <: TestMetrics
+function create_new_measure_instance(::Type{T}; explicit::Bool) where T <: TestMetrics
     return T()
 end
 
-function create_new_measure_instance(::Type{Nothing})
+function create_new_measure_instance(::Type{Nothing}; explicit::Bool)
     return nothing
 end
 
-function create_new_measure_instance(::Nothing)
-    return create_new_measure_instance(Nothing)
+function create_new_measure_instance(::Nothing; explicit::Bool)
+    return create_new_measure_instance(Nothing; explicit=explicit)
 end
 
 function gather_test_metrics end
 
 function gather_test_metrics(t::AsyncTestSuite)
+    t.disabled && return nothing
+
     for sub_testsuite in t.sub_testsuites
         gather_test_metrics(sub_testsuite)
         combine_test_metrics(t, sub_testsuite)
@@ -44,10 +46,11 @@ function gather_test_metrics(t::AsyncTestSuite)
 end
 
 function gather_test_metrics(t::AsyncTestCase)
+    t.disabled && return nothing
+
     gather_test_metrics(t.test_fn, t)
-    @show "AsyncTestCase"
-    @show t.testset_report.description
-    @show t.metrics
+
+    return nothing
 end
 
 function gather_test_metrics(fn::Function, t::AsyncTestCase)
@@ -109,7 +112,7 @@ function create_test_metrics(
     parent_testsuite::Option{AsyncTestSuiteOrTestCase}, ::Type{T}
 ) where T <: TestMetrics
     @assert parent_testsuite === nothing || parent_testsuite.metrics === nothing || parent_testsuite.metrics isa T
-    return create_new_measure_instance(T)
+    return create_new_measure_instance(T; explicit=true)
 end
 
 function create_test_metrics(
@@ -121,5 +124,7 @@ end
 function create_test_metrics(
     parent_testsuite::Option{AsyncTestSuiteOrTestCase}, ::Nothing
 )
-    return parent_testsuite === nothing ? nothing : create_new_measure_instance(parent_testsuite.metrics)
+    return parent_testsuite === nothing ?
+        nothing :
+        create_new_measure_instance(parent_testsuite.metrics; explicit=false)
 end
