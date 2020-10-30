@@ -1,4 +1,4 @@
-mutable struct DefaultTestMeasures
+mutable struct DefaultTestMeasures <: TestMeasures
     time::Float64
     bytes::Int
     gctime::Float64
@@ -10,8 +10,20 @@ end
 
 function create_new_measure_instance end
 
-function create_new_measure_instance(::DefaultTestMeasures)
+function create_new_measure_instance(::T) where T <: TestMeasures
+    create_new_measure_instance(T)
+end
+
+function create_new_measure_instance(::Type{DefaultTestMeasures})
     return DefaultTestMeasures()
+end
+
+function create_new_measure_instance(::Type{Nothing})
+    return nothing
+end
+
+function create_new_measure_instance(::Nothing)
+    return create_new_measure_instance(Nothing)
 end
 
 function gather_test_measures end
@@ -42,10 +54,10 @@ end
 
 function gather_test_measures(fn::Function, m::DefaultTestMeasures)
     val, t, bytes, gctime, memallocs = @timed fn()
-    m.time = time
+    m.time = t
     m.bytes = bytes
     m.gctime = gctime
-    m.gcstats = gcstats
+    m.gcstats = memallocs
     return val
 end
 
@@ -77,4 +89,23 @@ function combine_test_measures(parent::DefaultTestMeasures, sub::DefaultTestMeas
         parent.gcstats.full_sweep + sub.gcstats.full_sweep,
     )
     nothing
+end
+
+function create_measures(
+    parent_testsuite::Option{AsyncTestSuiteOrTestCase}, ::Type{T}
+) where T <: TestMeasures
+    @assert parent_testsuite === nothing || parent_testsuite.measures === nothing || parent_testsuite.measures isa T
+    return create_new_measure_instance(T)
+end
+
+function create_measures(
+    parent_testsuite::Option{AsyncTestSuiteOrTestCase}, ::T
+) where T <: TestMeasures
+    return create_measures(parent_testsuite, T)
+end
+
+function create_measures(
+    parent_testsuite::Option{AsyncTestSuiteOrTestCase}, ::Nothing
+)
+    return parent_testsuite === nothing ? nothing : create_new_measure_instance(parent_testsuite.measures)
 end

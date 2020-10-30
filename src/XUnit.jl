@@ -50,8 +50,10 @@ function AsyncTestSuite(
     sub_testcases::Vector{AsyncTestSuite} = AsyncTestSuite[],
     after_each::Function = () -> nothing,
     disabled::Bool = false,
-    measures::Option{TestMeasures} = nothing,
+    measures = nothing,
 )
+    measures_instance = create_measures(parent_testsuite, measures)
+
     instance = AsyncTestSuite(
         testset_report,
         parent_testsuite,
@@ -62,7 +64,7 @@ function AsyncTestSuite(
         disabled,
         ReentrantLock(),
         source,
-        measures,
+        measures_instance,
     )
     if parent_testsuite !== nothing
         lock(parent_testsuite.modify_lock) do
@@ -78,8 +80,10 @@ function AsyncTestCase(
     parent_testsuite::Option{AsyncTestSuiteOrTestCase},
     source::LineNumberNode;
     disabled::Bool=false,
-    measures::Option{TestMeasures} = nothing,
+    measures = nothing,
 )
+    measures_instance = create_measures(parent_testsuite, measures)
+
     instance = AsyncTestCase(
         testset_report,
         parent_testsuite,
@@ -89,7 +93,7 @@ function AsyncTestCase(
         AsyncTestSuite[],
         AsyncTestCase[],
         ReentrantLock(),
-        measures,
+        measures_instance,
     )
     if parent_testsuite !== nothing
         lock(parent_testsuite.modify_lock) do
@@ -116,9 +120,14 @@ function clear_test_reports!(testcase::AsyncTestCase)
     rich_ts.reporting_test_set[] = ReportingTestSet(rich_ts.description)
 end
 
-const TEST_SUITE_HOOK_FUNCTION_PARAMETER_NAMES = (
+const TEST_SUITE_PARAMETER_NAMES = (
     Expr(:quote, :before_each),
     Expr(:quote, :after_each),
+    Expr(:quote, :measures),
+)
+
+const TEST_CASE_PARAMETER_NAMES = (
+    Expr(:quote, :measures),
 )
 
 html_output(testsuite::AsyncTestSuite) = html_output(testsuite.testset_report)
@@ -271,7 +280,10 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
     function filter_hooks_fn(a)
         a.head == :call &&
         a.args[1] == :(=>) &&
-        (a.args[2] in TEST_SUITE_HOOK_FUNCTION_PARAMETER_NAMES && !is_testcase)
+        (
+            (a.args[2] in TEST_CASE_PARAMETER_NAMES && is_testcase) ||
+            (a.args[2] in TEST_SUITE_PARAMETER_NAMES && !is_testcase)
+        )
     end
 
     # separate hook functions from other params
@@ -631,5 +643,6 @@ export TestSetException
 export get_testset, get_testset_depth, run_testsuite
 export AbstractTestSet, DefaultTestSet, record, finish
 export TestRunner, SequentialTestRunner, ShuffledTestRunner, ParallelTestRunner
+export DefaultTestMeasures
 
 end

@@ -20,7 +20,7 @@ after_each_fn_gen(fn_name, extra_param=extra_param_value) = () -> println("     
 function schedule_tests()
     topname = "ABC"
     bottomname = "XYZ"
-    @testsuite "Top XParent $topname" begin
+    @testsuite "Top XParent $topname" measures=DefaultTestMeasures begin
         @testset "XTest 1" before_each=before_each_fn_gen("Child XTest 1") begin
             @testcase "Child XTest 1 $bottomname" begin
                 @test 1 == 1
