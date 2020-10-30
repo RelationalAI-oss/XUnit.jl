@@ -69,7 +69,7 @@ function gather_test_metrics(fn::Function, ts::AbstractTestSet, m::DefaultTestMe
     m.gctime = gctime
     m.gcstats = memallocs
 
-    save_test_metrics(ts, t.metrics)
+    save_test_metrics(ts, m)
 
     return val
 end
