@@ -643,6 +643,7 @@ export TestSetException
 export get_testset, get_testset_depth, run_testsuite
 export AbstractTestSet, DefaultTestSet, record, finish
 export TestRunner, SequentialTestRunner, ShuffledTestRunner, ParallelTestRunner
-export DefaultTestMetrics
+export TestMetrics, DefaultTestMetrics
+export gather_test_metrics, combine_test_metrics, save_test_metrics
 
 end

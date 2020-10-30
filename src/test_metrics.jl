@@ -14,8 +14,8 @@ function create_new_measure_instance(::T) where T <: TestMetrics
     create_new_measure_instance(T)
 end
 
-function create_new_measure_instance(::Type{DefaultTestMetrics})
-    return DefaultTestMetrics()
+function create_new_measure_instance(::Type{T}) where T <: TestMetrics
+    return T()
 end
 
 function create_new_measure_instance(::Type{Nothing})
@@ -37,9 +37,10 @@ function gather_test_metrics(t::AsyncTestSuite)
     for sub_testcase in t.sub_testcases
         combine_test_metrics(t, sub_testcase)
     end
-    @show "AsyncTestSuite"
-    @show t.testset_report.description
-    @show t.metrics
+
+    save_test_metrics(t.testset_report, t.metrics)
+
+    return nothing
 end
 
 function gather_test_metrics(t::AsyncTestCase)
@@ -50,21 +51,28 @@ function gather_test_metrics(t::AsyncTestCase)
 end
 
 function gather_test_metrics(fn::Function, t::AsyncTestCase)
-    return gather_test_metrics(fn, t.metrics)
+    return gather_test_metrics(fn, t.testset_report, t.metrics)
 end
 
-function gather_test_metrics(fn::Function, ::Nothing)
+function gather_test_metrics(fn::Function, ::Test.AbstractTestSet, ::Nothing)
     # nothing to measure by default
     return fn()
 end
 
-function gather_test_metrics(fn::Function, m::DefaultTestMetrics)
+function gather_test_metrics(fn::Function, ts::Test.AbstractTestSet, m::DefaultTestMetrics)
     val, t, bytes, gctime, memallocs = @timed fn()
     m.time = t
     m.bytes = bytes
     m.gctime = gctime
     m.gcstats = memallocs
+
+    save_test_metrics(ts, t.metrics)
+
     return val
+end
+
+function save_test_metrics(::Test.AbstractTestSet, ::DefaultTestMetrics)
+    # nothing to do
 end
 
 function combine_test_metrics(parent, sub)
