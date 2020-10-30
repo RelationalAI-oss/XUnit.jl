@@ -54,12 +54,12 @@ function gather_test_metrics(fn::Function, t::AsyncTestCase)
     return gather_test_metrics(fn, t.testset_report, t.metrics)
 end
 
-function gather_test_metrics(fn::Function, ::Test.AbstractTestSet, ::Nothing)
+function gather_test_metrics(fn::Function, ::AbstractTestSet, ::Nothing)
     # nothing to measure by default
     return fn()
 end
 
-function gather_test_metrics(fn::Function, ts::Test.AbstractTestSet, m::DefaultTestMetrics)
+function gather_test_metrics(fn::Function, ts::AbstractTestSet, m::DefaultTestMetrics)
     val, t, bytes, gctime, memallocs = @timed fn()
     m.time = t
     m.bytes = bytes
@@ -71,7 +71,7 @@ function gather_test_metrics(fn::Function, ts::Test.AbstractTestSet, m::DefaultT
     return val
 end
 
-function save_test_metrics(::Test.AbstractTestSet, ::DefaultTestMetrics)
+function save_test_metrics(::AbstractTestSet, ::DefaultTestMetrics)
     # nothing to do
 end
 
