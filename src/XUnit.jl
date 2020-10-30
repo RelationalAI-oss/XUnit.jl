@@ -10,6 +10,8 @@ using EzXML
 
 const Option{T} = Union{Nothing,T}
 
+abstract type TestMeasures end
+
 # BEGIN AsyncTestSuite and AsyncTestCase
 
 struct AsyncTestCase
@@ -21,6 +23,7 @@ struct AsyncTestCase
     sub_testsuites::Vector#{AsyncTestSuite}
     sub_testcases::Vector{AsyncTestCase}
     modify_lock::ReentrantLock
+    measures::Option{TestMeasures}
 end
 
 struct AsyncTestSuite
@@ -33,6 +36,7 @@ struct AsyncTestSuite
     disabled::Bool
     modify_lock::ReentrantLock
     source::LineNumberNode
+    measures::Option{TestMeasures}
 end
 
 const AsyncTestSuiteOrTestCase = Union{AsyncTestSuite,AsyncTestCase}
@@ -46,6 +50,7 @@ function AsyncTestSuite(
     sub_testcases::Vector{AsyncTestSuite} = AsyncTestSuite[],
     after_each::Function = () -> nothing,
     disabled::Bool = false,
+    measures::Option{TestMeasures} = nothing,
 )
     instance = AsyncTestSuite(
         testset_report,
@@ -57,6 +62,7 @@ function AsyncTestSuite(
         disabled,
         ReentrantLock(),
         source,
+        measures,
     )
     if parent_testsuite !== nothing
         lock(parent_testsuite.modify_lock) do
@@ -72,6 +78,7 @@ function AsyncTestCase(
     parent_testsuite::Option{AsyncTestSuiteOrTestCase},
     source::LineNumberNode;
     disabled::Bool=false,
+    measures::Option{TestMeasures} = nothing,
 )
     instance = AsyncTestCase(
         testset_report,
@@ -82,6 +89,7 @@ function AsyncTestCase(
         AsyncTestSuite[],
         AsyncTestCase[],
         ReentrantLock(),
+        measures,
     )
     if parent_testsuite !== nothing
         lock(parent_testsuite.modify_lock) do
@@ -90,6 +98,8 @@ function AsyncTestCase(
     end
     return instance
 end
+
+include("test_measures.jl")
 
 function clear_test_reports!(testsuite::AsyncTestSuite)
     rich_ts = testsuite.testset_report
@@ -401,7 +411,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                                     # like a testset and runs immediately
                                     # Note: `before_each` and `after_each` hooks are already
                                     # ran for the top-most test-case and won't run again
-                                    testcase_obj.test_fn()
+                                    gather_test_measures(testcase_obj)
                                 catch err
                                     err isa InterruptException && rethrow()
                                     # something in the test block threw an error. Count that as an
