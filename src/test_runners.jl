@@ -1,7 +1,10 @@
+using Distributed #for DistributedTestRunner
+
 abstract type TestRunner end
 struct SequentialTestRunner <: TestRunner end
 struct ShuffledTestRunner <: TestRunner end
 struct ParallelTestRunner <: TestRunner end
+struct DistributedTestRunner <: TestRunner end
 
 # Runs a Scheduled Test-Suite
 function run_testsuite(::Type{T}, testsuite::AsyncTestSuite) where T <: TestRunner
@@ -11,11 +14,13 @@ end
 function run_testsuite(
     testsuite::TEST_SUITE,
     ::Type{T}=SequentialTestRunner
-)::TEST_SUITE where {T <: TestRunner, TEST_SUITE <: AsyncTestSuite}
-    _run_testsuite(T, testsuite)
-    _finalize_reports(testsuite)
-    gather_test_metrics(testsuite)
-    return testsuite
+)::Bool where {T <: TestRunner, TEST_SUITE <: AsyncTestSuite}
+    if _run_testsuite(T, testsuite)
+        _finalize_reports(testsuite)
+        gather_test_metrics(testsuite)
+        return true
+    end
+    return false
 end
 
 function _run_testsuite(
@@ -24,10 +29,34 @@ function _run_testsuite(
 ) where T <: TestRunner
     scheduled_tests = _schedule_tests(T, testsuite)
     _run_scheduled_tests(T, scheduled_tests)
-    return testsuite
+    return true
 end
 
-struct ScheduledTest
+function _run_testsuite(
+    ::Type{T},
+    testsuite::AsyncTestSuite,
+) where T <: DistributedTestRunner
+    scheduled_tests = _schedule_tests(T, testsuite)
+    tls = task_local_storage()
+    already_running = haskey(tls, :__ALREADY_RUNNING_DISTRIBUTED_TESTS__)
+    if myid() == 1
+        @assert !already_running
+        try
+            tls[:__ALREADY_RUNNING_DISTRIBUTED_TESTS__] = true
+            _run_scheduled_tests(T, scheduled_tests)
+        finally
+            delete!(tls, :__ALREADY_RUNNING_DISTRIBUTED_TESTS__)
+        end
+        return true
+    else
+        @assert !isdefined(Main, :__SCHEDULED_DISTRIBUTED_TESTS__)
+        Core.eval(Main, Expr(:(=), :__SCHEDULED_DISTRIBUTED_TESTS__, scheduled_tests))
+    end
+
+    return false
+end
+
+mutable struct ScheduledTest
     parent_testsets::Vector{AsyncTestSuite}
     target_testcase::AsyncTestCase
 end
@@ -156,7 +185,7 @@ function _run_testsuite(
     elseif Test.TESTSET_PRINT_ENABLE[]
         printstyled("Skipping $suite_path test-suite...\n"; color=:light_black)
     end
-    return testsuite
+    return true
 end
 
 function run_single_testcase(
@@ -258,3 +287,94 @@ function _finalize_reports(testcase::TEST_CASE)::TEST_CASE where TEST_CASE <: As
     Test.finish(testcase.testset_report)
     return testcase
 end
+
+function passobj(src::Int, target::AbstractVector{Int}, nm::Symbol; from_mod=Main, to_mod=Main)
+    r = RemoteChannel(src)
+    @spawnat(src, put!(r, getfield(from_mod, nm)))
+    @sync for to in target
+        @spawnat(to, Core.eval(to_mod, Expr(:(=), nm, fetch(r))))
+    end
+    nothing
+end
+
+macro passobj(src::Int, target, val, from_mod=:Main, tomod=:Main)
+    quote
+        passobj($(esc(src)), $(esc(target)), $(QuoteNode(val)); from_mod=$from_mod, to_mod=$tomod)
+    end
+end
+
+
+function passobj(src::Int, target::Int, nm::Symbol; from_mod=Main, to_mod=Main)
+    passobj(src, [target], nm; from_mod=from_mod, to_mod=to_mod)
+end
+
+
+function passobj(src::Int, target, nms::Vector{Symbol}; from_mod=Main, to_mod=Main)
+    for nm in nms
+        passobj(src, target, nm; from_mod=from_mod, to_mod=to_mod)
+    end
+end
+
+@everywhere include_string(Main, $(read("packages/XUnit/src/shared_distributed_code.jl", String)), "shared_distributed_code.jl")
+
+function _run_scheduled_tests(
+    ::Type{DistributedTestRunner},
+    scheduled_tests::Vector{ScheduledTest},
+)
+    # make sure to pass the test-state to the underlying threads (mostly for test filtering)
+    parent_thread_tls = task_local_storage()
+    has_xunit_state = haskey(parent_thread_tls, :__XUNIT_STATE__)
+    xunit_state = has_xunit_state ? parent_thread_tls[:__XUNIT_STATE__] : nothing
+
+    Core.eval(Main, Expr(:(=), :GLOBAL_HAS_XUNIT_STATE, has_xunit_state))
+    Core.eval(Main, Expr(:(=), :GLOBAL_XUNIT_STATE, xunit_state))
+    Core.eval(Main, Expr(:(=), :GLOBAL_SCHEDULED_TESTS, scheduled_tests))
+
+    @passobj 1 workers() GLOBAL_HAS_XUNIT_STATE
+    @passobj 1 workers() GLOBAL_XUNIT_STATE
+    @passobj 1 workers() GLOBAL_SCHEDULED_TESTS
+
+    num_tests = length(scheduled_tests)
+
+    jobs = RemoteChannel(()->Channel{Tuple{Int,Option{String}}}(num_tests));
+
+    results = RemoteChannel(()->Channel{Tuple{Int,Option{AsyncTestCase},Int}}(num_tests));
+
+    n = num_tests
+
+    function make_jobs(scheduled_tests)
+        last_i = 0
+        try
+            for (i, tst) in enumerate(scheduled_tests)
+                put!(jobs, (i, tst.target_testcase.testset_report.description))
+                last_i = i
+            end
+        catch e
+            for i in last_i:length(scheduled_tests)
+                put!(jobs, (i, nothing))
+            end
+        end
+    end
+
+    @async make_jobs(scheduled_tests); # feed the jobs channel with "n" jobs
+
+    for p in workers() # start tasks on the workers to process requests in parallel
+        remote_do(Main.SharedDistributedCode.do_work, p, jobs, results)
+    end
+
+    while n > 0 # collect results
+        job_id, returned_test_case, worker = take!(results)
+
+        orig_test_case = scheduled_tests[job_id].target_testcase
+        if returned_test_case !== nothing
+            orig_test_case.testset_report = returned_test_case.testset_report
+            orig_test_case.sub_testsuites = returned_test_case.sub_testsuites
+            orig_test_case.sub_testcases = returned_test_case.sub_testcases
+            orig_test_case.metrics = returned_test_case.metrics
+        end
+
+        n = n - 1
+    end
+end
+
+export DistributedTestRunner

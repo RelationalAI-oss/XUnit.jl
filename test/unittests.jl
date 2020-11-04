@@ -2,6 +2,7 @@ module UnitTests
 
 using XUnit
 import Test
+using Distributed
 
 function fn_throws()
     throw(KeyError("Test error!"))
@@ -159,11 +160,13 @@ function run_tests_and_report()
     Test.TESTSET_PRINT_ENABLE[] = true
     println("Running tests with $(Threads.nthreads()) threads")
     testsuite = schedule_tests()
-    # run_testsuite(SequentialTestRunner, testsuite)
-    # run_testsuite(ShuffledTestRunner, testsuite)
-    run_testsuite(ParallelTestRunner, testsuite)
-    html_report!(testsuite; show_stdout=Test.TESTSET_PRINT_ENABLE[])
-    run(`open ./$(html_output(testsuite))`)
+    # if run_testsuite(SequentialTestRunner, testsuite)
+    # if run_testsuite(ShuffledTestRunner, testsuite)
+    # if run_testsuite(ParallelTestRunner, testsuite)
+    if run_testsuite(DistributedTestRunner, testsuite)
+        html_report!(testsuite; show_stdout=Test.TESTSET_PRINT_ENABLE[])
+        run(`open ./$(html_output(testsuite))`)
+    end
 end
 
 run_tests_and_report()

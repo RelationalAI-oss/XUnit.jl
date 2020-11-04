@@ -14,7 +14,7 @@ abstract type TestMetrics end
 
 # BEGIN AsyncTestSuite and AsyncTestCase
 
-struct AsyncTestCase
+mutable struct AsyncTestCase
     testset_report::AbstractTestSet
     parent_testsuite#::Option{AsyncTestSuiteOrTestCase}
     test_fn::Function
@@ -328,8 +328,7 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
             Test.pop_testset()
             if $is_testset
                 if get_testset_depth() == 0
-                    run_testsuite(SequentialTestRunner, ret)
-                    if Test.TESTSET_PRINT_ENABLE[]
+                    if run_testsuite(SequentialTestRunner, ret) && Test.TESTSET_PRINT_ENABLE[]
                         TestReports.display_reporting_testset(ts)
                     end
                 end
@@ -571,13 +570,14 @@ in `args`.  See alternative form of `runtests` for examples.
 """
 function runtests(filepath::String, args...)
     runtests(typemax(Int), args...) do
-        @eval Main begin
-            # Construct a new throw-away module in which to run the tests
-            # (see https://github.com/RelationalAI-oss/XUnit.jl/issues/2)
-            m = @eval Main module $(gensym("XUnitModule")) end  # e.g. Main.##XUnitModule#365
-            # Perform the include inside the new module m
-            m.include($filepath)
-        end
+        XUnitModuleName = replace(string(gensym("XUnitModule")), "#" => "_")
+        GLOBAL_TEST_FILENAME = filepath
+        GLOBAL_TEST_MOD = string("module ",XUnitModuleName, "; ",read(filepath, String), "\nend")
+        Core.eval(Main, Expr(:(=), :GLOBAL_TEST_MOD, GLOBAL_TEST_MOD))
+        Core.eval(Main, Expr(:(=), :GLOBAL_TEST_FILENAME, GLOBAL_TEST_FILENAME))
+        @passobj 1 workers() GLOBAL_TEST_FILENAME
+        @passobj 1 workers() GLOBAL_TEST_MOD
+        @everywhere include_string(Main, Main.GLOBAL_TEST_MOD, Main.GLOBAL_TEST_FILENAME)
     end
 end
 
