@@ -321,6 +321,11 @@ function _run_scheduled_tests(
     ::Type{DistributedTestRunner},
     scheduled_tests::Vector{ScheduledTest},
 )
+    # if we have a single worker, then we run tests sequentially
+    if nworkers() == 1
+        return _run_scheduled_tests(SequentialTestRunner, scheduled_tests)
+    end
+
     # make sure to pass the test-state to the underlying threads (mostly for test filtering)
     parent_thread_tls = task_local_storage()
     has_xunit_state = haskey(parent_thread_tls, :__XUNIT_STATE__)
