@@ -315,12 +315,12 @@ function passobj(src::Int, target, nms::Vector{Symbol}; from_mod=Main, to_mod=Ma
     end
 end
 
-@everywhere include_string(Main, $(read(joinpath(@__DIR__, "shared_distributed_code.jl"), String)), "shared_distributed_code.jl")
-
 function _run_scheduled_tests(
     ::Type{DistributedTestRunner},
     scheduled_tests::Vector{ScheduledTest},
 )
+    @everywhere include_string(Main, $(read(joinpath(@__DIR__, "shared_distributed_code.jl"), String)), "shared_distributed_code.jl")
+
     # if we have a single worker, then we run tests sequentially
     if nworkers() == 1
         return _run_scheduled_tests(SequentialTestRunner, scheduled_tests)
