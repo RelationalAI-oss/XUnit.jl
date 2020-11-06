@@ -74,7 +74,7 @@ function gather_test_metrics(fn::Function, ts::AbstractTestSet, m::DefaultTestMe
     return val
 end
 
-function save_test_metrics(::AbstractTestSet, ::DefaultTestMetrics)
+function save_test_metrics(::AbstractTestSet, ::Option{DefaultTestMetrics})
     # nothing to do
 end
 

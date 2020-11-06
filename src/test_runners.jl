@@ -49,7 +49,7 @@ function _run_testsuite(
         end
         return true
     else
-        @assert !isdefined(Main, :__SCHEDULED_DISTRIBUTED_TESTS__)
+        @assert !isdefined(Main, :__SCHEDULED_DISTRIBUTED_TESTS__) "Main.__SCHEDULED_DISTRIBUTED_TESTS__ IS defined on process $(myid())"
         Core.eval(Main, Expr(:(=), :__SCHEDULED_DISTRIBUTED_TESTS__, scheduled_tests))
     end
 
@@ -315,7 +315,7 @@ function passobj(src::Int, target, nms::Vector{Symbol}; from_mod=Main, to_mod=Ma
     end
 end
 
-@everywhere include_string(Main, $(read("packages/XUnit/src/shared_distributed_code.jl", String)), "shared_distributed_code.jl")
+@everywhere include_string(Main, $(read(joinpath(@__DIR__, "shared_distributed_code.jl"), String)), "shared_distributed_code.jl")
 
 function _run_scheduled_tests(
     ::Type{DistributedTestRunner},
@@ -364,6 +364,8 @@ function _run_scheduled_tests(
 
     while n > 0 # collect results
         job_id, returned_test_case, worker = take!(results)
+
+        job_id == 0 && break
 
         orig_test_case = scheduled_tests[job_id].target_testcase
         if returned_test_case !== nothing
