@@ -29,12 +29,24 @@ function do_work(jobs, results) # define work function everywhere
                 # thread-safe print
                 print(read(std_io, String))
             end
-            XUnit.run_single_testcase(st.parent_testsets, st.target_testcase)
 
-            put!(results, (scheduled_tests_index, st.target_testcase, myid()))
+            try
+                XUnit.run_single_testcase(st.parent_testsets, st.target_testcase)
+
+                put!(results, (
+                    scheduled_tests_index,
+                    XUnit.DistributedAsyncTestMessage(st.target_testcase),
+                    myid(),
+                ))
+            catch e
+                println("A critical error occued in while running '$scheduled_test_name': ", e)
+                for s in stacktrace(catch_backtrace())
+                    println(s)
+                end
+            end
         end
     catch e
-        println("ERROR: ", e)
+        println("A critical error occued in XUnit while running tests: ", e)
         for s in stacktrace(catch_backtrace())
             println(s)
         end

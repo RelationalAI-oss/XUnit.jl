@@ -343,7 +343,9 @@ function _run_scheduled_tests(
 
     jobs = RemoteChannel(()->Channel{Tuple{Int,Option{String}}}(num_tests));
 
-    results = RemoteChannel(()->Channel{Tuple{Int,Option{AsyncTestCase},Int}}(num_tests));
+    results = RemoteChannel(
+        () -> Channel{Tuple{Int,Option{DistributedAsyncTestMessage},Int}}(num_tests)
+    );
 
     n = num_tests
 
@@ -375,13 +377,82 @@ function _run_scheduled_tests(
         orig_test_case = scheduled_tests[job_id].target_testcase
         if returned_test_case !== nothing
             orig_test_case.testset_report = returned_test_case.testset_report
-            orig_test_case.sub_testsuites = returned_test_case.sub_testsuites
-            orig_test_case.sub_testcases = returned_test_case.sub_testcases
+            orig_test_case.sub_testsuites = map(msg -> AsyncTestSuite(orig_test_case, msg), returned_test_case.sub_testsuites)
+            orig_test_case.sub_testcases = map(msg -> AsyncTestCase(orig_test_case, msg), returned_test_case.sub_testcases)
             orig_test_case.metrics = returned_test_case.metrics
         end
 
         n = n - 1
     end
+end
+
+struct DistributedAsyncTestMessage
+    testset_report::AbstractTestSet
+    source::LineNumberNode
+    disabled::Bool
+    sub_testsuites::Vector{DistributedAsyncTestMessage}
+    sub_testcases::Vector{DistributedAsyncTestMessage}
+    metrics::Option{TestMetrics}
+end
+
+function DistributedAsyncTestMessage(t::AsyncTestSuiteOrTestCase)
+    return DistributedAsyncTestMessage(
+        t.testset_report,
+        t.source,
+        t.disabled,
+        map(DistributedAsyncTestMessage, t.sub_testsuites),
+        map(DistributedAsyncTestMessage, t.sub_testcases),
+        t.metrics,
+    )
+end
+
+function AsyncTestCase(parent, msg::DistributedAsyncTestMessage)
+    t = AsyncTestCase(
+        msg.testset_report,
+        parent,
+        () -> nothing,
+        msg.source,
+        msg.disabled,
+        AsyncTestSuite[],
+        AsyncTestCase[],
+        ReentrantLock(),
+        msg.metrics,
+    )
+
+    for sub_testsuite in msg.sub_testsuites
+        push!(parent.sub_testsuites, AsyncTestSuite(t, sub_testsuite))
+    end
+
+    for sub_testcase in msg.sub_testcases
+        push!(parent.sub_testcases, AsyncTestCase(t, sub_testcase))
+    end
+
+    return t
+end
+
+function AsyncTestSuite(parent::AsyncTestSuiteOrTestCase, msg::DistributedAsyncTestMessage)
+    t = AsyncTestSuite(
+        msg.testset_report,
+        parent,
+        () -> nothing,
+        AsyncTestSuite[],
+        AsyncTestCase[],
+        () -> nothing,
+        msg.disabled,
+        ReentrantLock(),
+        msg.source,
+        msg.metrics,
+    )
+
+    for sub_testsuite in msg.sub_testsuites
+        push!(parent.sub_testsuites, AsyncTestSuite(t, sub_testsuite))
+    end
+
+    for sub_testcase in msg.sub_testcases
+        push!(parent.sub_testcases, AsyncTestCase(t, sub_testcase))
+    end
+
+    return t
 end
 
 export DistributedTestRunner
