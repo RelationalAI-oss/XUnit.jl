@@ -13,8 +13,13 @@ function do_work(jobs, results) # define work function everywhere
         @assert isdefined(Main, :__SCHEDULED_DISTRIBUTED_TESTS__) "Main.__SCHEDULED_DISTRIBUTED_TESTS__ IS NOT defined on process $(myid())"
         scheduled_tests = Main.__SCHEDULED_DISTRIBUTED_TESTS__
 
+        task_count = 0
         while true
             (scheduled_tests_index, scheduled_test_name) = take!(jobs)
+            scheduled_tests_index < 1 && break
+            task_count += 1
+
+            println("Process $(myid()) is handling task #$(task_count)")
 
             st = scheduled_tests[scheduled_tests_index]
             @assert st.target_testcase.testset_report.description == scheduled_test_name
@@ -47,6 +52,7 @@ function do_work(jobs, results) # define work function everywhere
                 end
             end
         end
+        println("Process $(myid()) is done with handling task after running $(task_count) tasks")
     catch e
         has_wrapped_exception(e, InterruptException) && rethrow()
 

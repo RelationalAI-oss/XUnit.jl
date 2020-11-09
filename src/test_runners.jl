@@ -350,12 +350,12 @@ function _run_scheduled_tests(
     jobs = RemoteChannel(()->Channel{Tuple{Int,Option{String}}}(num_tests));
 
     results = RemoteChannel(
-        () -> Channel{Tuple{Int,Option{DistributedAsyncTestMessage},Int}}(num_tests)
+        () -> Channel{Tuple{Int,Option{DistributedAsyncTestMessage},Int}}(num_tests + nworkers())
     );
 
     n = num_tests
 
-    function make_jobs(scheduled_tests)
+    function make_jobs(scheduled_tests, num_workers::Int)
         last_i = 0
         try
             for (i, tst) in enumerate(scheduled_tests)
@@ -367,9 +367,12 @@ function _run_scheduled_tests(
                 put!(jobs, (i, nothing))
             end
         end
+        for i in 1:num_workers
+            put!(jobs, (-1, nothing))
+        end
     end
 
-    @async make_jobs(scheduled_tests); # feed the jobs channel with "n" jobs
+    @async make_jobs(scheduled_tests, nworkers()); # feed the jobs channel with "n" jobs
 
     for p in workers() # start tasks on the workers to process requests in parallel
         remote_do(Main.SharedDistributedCode.do_work, p, jobs, results)
