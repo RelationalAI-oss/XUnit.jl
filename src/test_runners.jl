@@ -329,7 +329,15 @@ function _run_scheduled_tests(
     # make sure to pass the test-state to the underlying threads (mostly for test filtering)
     parent_thread_tls = task_local_storage()
     has_xunit_state = haskey(parent_thread_tls, :__XUNIT_STATE__)
-    xunit_state = has_xunit_state ? parent_thread_tls[:__XUNIT_STATE__] : nothing
+    xunit_state = if has_xunit_state
+        xs = create_deep_copy(parent_thread_tls[:__XUNIT_STATE__])
+        empty!(xs.test_suites_stack)
+        empty!(xs.stack)
+        empty!(xs.seen)
+        xs
+    else
+        nothing
+    end
 
     Core.eval(Main, Expr(:(=), :GLOBAL_HAS_XUNIT_STATE, has_xunit_state))
     Core.eval(Main, Expr(:(=), :GLOBAL_XUNIT_STATE, xunit_state))

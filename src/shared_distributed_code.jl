@@ -39,6 +39,8 @@ function do_work(jobs, results) # define work function everywhere
                     myid(),
                 ))
             catch e
+                has_wrapped_exception(e, InterruptException) && rethrow()
+
                 println("A critical error occued in while running '$scheduled_test_name': ", e)
                 for s in stacktrace(catch_backtrace())
                     println(s)
@@ -46,6 +48,8 @@ function do_work(jobs, results) # define work function everywhere
             end
         end
     catch e
+        has_wrapped_exception(e, InterruptException) && rethrow()
+
         println("A critical error occued in XUnit while running tests: ", e)
         for s in stacktrace(catch_backtrace())
             println(s)
