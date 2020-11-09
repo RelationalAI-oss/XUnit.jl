@@ -341,11 +341,9 @@ function _run_scheduled_tests(
 
     Core.eval(Main, Expr(:(=), :GLOBAL_HAS_XUNIT_STATE, has_xunit_state))
     Core.eval(Main, Expr(:(=), :GLOBAL_XUNIT_STATE, xunit_state))
-    Core.eval(Main, Expr(:(=), :GLOBAL_SCHEDULED_TESTS, scheduled_tests))
 
     @passobj 1 workers() GLOBAL_HAS_XUNIT_STATE
     @passobj 1 workers() GLOBAL_XUNIT_STATE
-    @passobj 1 workers() GLOBAL_SCHEDULED_TESTS
 
     num_tests = length(scheduled_tests)
 
