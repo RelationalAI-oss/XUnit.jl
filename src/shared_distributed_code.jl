@@ -19,7 +19,7 @@ function do_work(jobs, results) # define work function everywhere
             scheduled_tests_index < 1 && break
             task_count += 1
 
-            println("Process $(myid()) is handling task #$(task_count)")
+            println("Process $(myid()) is handling task #$(task_count) (which is $(scheduled_tests_index)/$(length(scheduled_tests)))")
 
             st = scheduled_tests[scheduled_tests_index]
             @assert st.target_testcase.testset_report.description == scheduled_test_name
@@ -52,7 +52,7 @@ function do_work(jobs, results) # define work function everywhere
                 end
             end
         end
-        println("Process $(myid()) is done with handling task after running $(task_count) tasks")
+        println("Process $(myid()) is done with handling task after running $(task_count) tasks (out of $(length(scheduled_tests)))")
     catch e
         has_wrapped_exception(e, InterruptException) && rethrow()
 
