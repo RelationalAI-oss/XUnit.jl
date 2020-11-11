@@ -378,10 +378,29 @@ function _run_scheduled_tests(
         remote_do(Main.SharedDistributedCode.do_work, p, jobs, results)
     end
 
+    handled_scheduled_tests = falses(length(scheduled_tests))
+
     while n > 0 # collect results
         job_id, returned_test_case, worker = take!(results)
 
-        job_id == 0 && break
+        if job_id == 0
+            for (job_id, ishandled) in enumerate(handled_scheduled_tests)
+                if !ishandled
+                    orig_test_case = scheduled_tests[job_id].target_testcase
+                    ts = orig_test_case.testset_report.reporting_test_set
+                    record(ts, Error(
+                        :nontest_error,
+                        Expr(:tuple),
+                        "An error occurred in the worker test-runner process.",
+                        Base.catch_stack(),
+                        orig_test_case.source
+                    ))
+                end
+            end
+            break
+        end
+
+        handled_scheduled_tests[job_id] = true
 
         orig_test_case = scheduled_tests[job_id].target_testcase
         if returned_test_case !== nothing
