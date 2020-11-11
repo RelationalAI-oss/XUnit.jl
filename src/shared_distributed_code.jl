@@ -51,6 +51,16 @@ function do_work(jobs, results) # define work function everywhere
                 for s in stacktrace(catch_backtrace())
                     println(s)
                 end
+
+                # something in the test block threw an error. Count that as an
+                # error in this test set
+                ts = st.target_testcase.testset_report.reporting_test_set
+                record(ts, Error(:nontest_error, Expr(:tuple), e, Base.catch_stack(), st.target_testcase.source))
+                put!(results, (
+                    scheduled_tests_index,
+                    XUnit.DistributedAsyncTestMessage(st.target_testcase),
+                    myid(),
+                ))
             end
         end
         println("Process $(myid()) is done with handling task after running $(task_count) tasks (out of $(length(scheduled_tests)))")
