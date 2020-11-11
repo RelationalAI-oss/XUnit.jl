@@ -2,6 +2,7 @@ module SharedDistributedCode
 
 using Distributed
 using Test
+using ExceptionUnwrapping: has_wrapped_exception
 import XUnit
 
 function do_work(jobs, results) # define work function everywhere
