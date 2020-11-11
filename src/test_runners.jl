@@ -387,7 +387,7 @@ function _run_scheduled_tests(
             for (job_id, ishandled) in enumerate(handled_scheduled_tests)
                 if !ishandled
                     orig_test_case = scheduled_tests[job_id].target_testcase
-                    ts = orig_test_case.testset_report.reporting_test_set
+                    ts = orig_test_case.testset_report.reporting_test_set[]
                     record(ts, Error(
                         :nontest_error,
                         Expr(:tuple),
