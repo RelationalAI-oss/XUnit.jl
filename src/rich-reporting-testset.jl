@@ -55,7 +55,10 @@ function TestReports.add_to_ts_default!(ts_default::Test.DefaultTestSet, rich_ts
     push!(ts_default.results, sub_ts)
 end
 
-function TestReports.display_reporting_testset(rich_ts::RichReportingTestSet)
+function TestReports.display_reporting_testset(
+    rich_ts::RichReportingTestSet;
+    throw_on_error::Bool = false,
+)
     ts = rich_ts.reporting_test_set[]
     # Create top level default testset to hold all results
     ts_default = DefaultTestSet(rich_ts.description)
@@ -66,7 +69,8 @@ function TestReports.display_reporting_testset(rich_ts::RichReportingTestSet)
         Test.pop_testset()
         finish(ts_default)
     catch TestSetException
-        # Don't want to error here if a test fails or errors. This is handled elswhere.
+        throw_on_error && rethrow()
+        # Otherwise, don't want to error here if a test fails or errors. This is handled elswhere.
     end
     return nothing
 end
