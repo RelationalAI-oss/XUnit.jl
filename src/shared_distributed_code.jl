@@ -26,7 +26,7 @@ function do_work(jobs, results) # define work function everywhere
             (scheduled_tests_index, scheduled_test_name) = take!(jobs)
             scheduled_tests_index < 1 && break
             if scheduled_tests_index > length(scheduled_tests)
-                throw("scheduled_tests_index ($scheduled_tests_index) is outside of bound for scheduled_tests (with $(length(scheduled_tests) elements)")
+                throw("scheduled_tests_index ($scheduled_tests_index) is outside of bound for scheduled_tests (with $(length(scheduled_tests)) elements)")
             end
 
             task_count += 1
