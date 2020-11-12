@@ -156,8 +156,8 @@ end
 
 # END AsyncTestSuite and AsyncTestCase
 
-include("test_runners.jl")
 include("rich-reporting-testset.jl")
+include("test_runners.jl")
 include("test_filter.jl")
 
 # BEGIN XUnitState

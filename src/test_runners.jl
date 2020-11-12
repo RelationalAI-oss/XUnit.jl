@@ -433,7 +433,7 @@ end
 
 function DistributedAsyncTestMessage(t::AsyncTestSuiteOrTestCase)
     return DistributedAsyncTestMessage(
-        t.testset_report,
+        convert_results_to_be_transferrable(t.testset_report),
         t.source,
         t.disabled,
         map(DistributedAsyncTestMessage, t.sub_testsuites),
@@ -489,6 +489,44 @@ function AsyncTestSuite(parent::AsyncTestSuiteOrTestCase, msg::DistributedAsyncT
     end
 
     return t
+end
+
+"""
+    convert_results_to_be_transferrable(x)
+
+Converts the results of a testset to be transferrable between processes
+
+Basically, any code or struct that is process-specific (i.e., related to the tests that
+ran on a specific process) is not transferrable between processes. This function converts
+any possible data of this kind in the results to simpler common types (e.g., String)
+"""
+function convert_results_to_be_transferrable(x)
+    return x
+end
+
+function convert_results_to_be_transferrable(ts::AbstractTestSet)
+    results_copy = copy(ts.results)
+    empty!(ts.results)
+    for t in results_copy
+        push!(ts.results, convert_results_to_be_transferrable(t))
+    end
+    return ts
+end
+
+function convert_results_to_be_transferrable(ts::RichReportingTestSet)
+    convert_results_to_be_transferrable(ts.reporting_test_set[])
+    return ts
+end
+
+function convert_results_to_be_transferrable(res::Pass)
+    if res.test_type == :test_throws
+        # A passed `@test_throws` contains the stacktrace for the (correctly) thrown exception
+        # This exception might contain references to some types that are not available
+        # on other processes (e.g., the master process that consolidates the results)
+        # The stack-trace is converted to string here.
+        return Pass(:test_throws, nothing, nothing, string(res.value))
+    end
+    return res
 end
 
 export DistributedTestRunner
