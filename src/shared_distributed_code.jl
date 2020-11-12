@@ -30,20 +30,20 @@ function do_work(jobs, results) # define work function everywhere
             println("Process $(myid()) is handling task #$(task_count) (which is $(scheduled_tests_index)/$(length(scheduled_tests)))")
 
             st = scheduled_tests[scheduled_tests_index]
-            @assert st.target_testcase.testset_report.description == scheduled_test_name
-
-            if Test.TESTSET_PRINT_ENABLE[]
-                path = XUnit._get_path(vcat(st.parent_testsets, [st.target_testcase]))
-                std_io = IOBuffer()
-                print(std_io, "-> Running ")
-                printstyled(std_io, path; bold=true)
-                println(std_io, string(" test-case (on pid=", myid(), ")..."))
-                seekstart(std_io)
-                # thread-safe print
-                print(read(std_io, String))
-            end
-
             try
+                @assert st.target_testcase.testset_report.description == scheduled_test_name "st.target_testcase.testset_report.description (\"$(st.target_testcase.testset_report.description)\") != scheduled_test_name (\"$(scheduled_test_name)\")"
+
+                if Test.TESTSET_PRINT_ENABLE[]
+                    path = XUnit._get_path(vcat(st.parent_testsets, [st.target_testcase]))
+                    std_io = IOBuffer()
+                    print(std_io, "-> Running ")
+                    printstyled(std_io, path; bold=true)
+                    println(std_io, string(" test-case (on pid=", myid(), ")..."))
+                    seekstart(std_io)
+                    # thread-safe print
+                    print(read(std_io, String))
+                end
+
                 XUnit.run_single_testcase(st.parent_testsets, st.target_testcase)
 
                 put!(results, (
