@@ -368,8 +368,10 @@ function _run_scheduled_tests(
     function make_jobs(scheduled_tests, num_workers::Int)
         last_i = 0
         try
+            println("List of scheduled tests on master:")
             for (i, tst) in enumerate(scheduled_tests)
                 put!(jobs, (i, tst.target_testcase.testset_report.description))
+                println("$i => $(tst.target_testcase.testset_report.description)")
                 last_i = i
             end
         catch e

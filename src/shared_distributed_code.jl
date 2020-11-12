@@ -25,13 +25,26 @@ function do_work(jobs, results) # define work function everywhere
         while true
             (scheduled_tests_index, scheduled_test_name) = take!(jobs)
             scheduled_tests_index < 1 && break
+            if scheduled_tests_index > length(scheduled_tests)
+                throw("scheduled_tests_index ($scheduled_tests_index) is outside of bound for scheduled_tests (with $(length(scheduled_tests) elements)")
+            end
+
             task_count += 1
 
             println("Process $(myid()) is handling task #$(task_count) (which is $(scheduled_tests_index)/$(length(scheduled_tests)))")
 
             st = scheduled_tests[scheduled_tests_index]
             try
-                @assert st.target_testcase.testset_report.description == scheduled_test_name "st.target_testcase.testset_report.description (\"$(st.target_testcase.testset_report.description)\") != scheduled_test_name (\"$(scheduled_test_name)\")"
+                if st.target_testcase.testset_report.description != scheduled_test_name
+                    println("A critical test scheduling error:")
+                    println("  st.target_testcase.testset_report.description (\"$(st.target_testcase.testset_report.description)\") != scheduled_test_name (\"$(scheduled_test_name)\")")
+                    println("List of scheduled tests on worker #$(myid()):")
+                    for (i, tst) in enumerate(scheduled_tests)
+                        println("$i ==> $(tst.target_testcase.testset_report.description)")
+                    end
+                    put!(jobs, (scheduled_tests_index, scheduled_test_name))
+                    break
+                end
 
                 if Test.TESTSET_PRINT_ENABLE[]
                     path = XUnit._get_path(vcat(st.parent_testsets, [st.target_testcase]))
