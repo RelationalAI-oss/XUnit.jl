@@ -358,7 +358,9 @@ function _run_scheduled_tests(
     jobs = RemoteChannel(()->Channel{Tuple{Int,Option{String}}}(num_tests));
 
     results = RemoteChannel(
-        () -> Channel{Tuple{Int,Option{DistributedAsyncTestMessage},Int}}(num_tests + nworkers())
+        () -> Channel{Tuple{Int,Option{DistributedAsyncTestMessage},Int}}(
+            num_tests + nworkers()
+        )
     );
 
     n = num_tests
@@ -382,9 +384,37 @@ function _run_scheduled_tests(
 
     @async make_jobs(scheduled_tests, nworkers()); # feed the jobs channel with "n" jobs
 
-    for p in workers() # start tasks on the workers to process requests in parallel
-        remote_do(Main.SharedDistributedCode.do_work, p, jobs, results)
+    function start_worker_processes(jobs, results)
+        # Here, we first make sure that all workers are ready before giving them any task
+        # Otherwise, there is a possibility of getting into a Julia `world age` issue
+        ready_workers = Set{Int}()
+        worker_state_futures = map(p -> (p, remotecall(
+            () -> begin
+                while !isdefined(Main, :__SCHEDULED_DISTRIBUTED_TESTS__) &&
+                      !isdefined(Main, :__RUN_DISTRIBUTED_TESTS_CALLED__)
+                    sleep(1)
+                end
+                return true
+            end, p)),
+            workers(),
+        )
+
+        while true
+            for (p, worker_state) in worker_state_futures
+                if !(p in ready_workers) && isready(worker_state)
+                    @assert fetch(worker_state)
+                    println("Worker #$p is ready to start processing test-cases.")
+                    # start tasks on the workers to process requests in parallel
+                    remote_do(Main.SharedDistributedCode.do_work, p, jobs, results)
+                    push!(ready_workers, p)
+                end
+            end
+            length(ready_workers) == nworkers() && break
+            sleep(1)
+        end
     end
+
+    @async start_worker_processes(jobs, results)
 
     handled_scheduled_tests = falses(length(scheduled_tests))
 
