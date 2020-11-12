@@ -62,7 +62,7 @@ function do_work(jobs, results) # define work function everywhere
                 # something in the test block threw an error. Count that as an
                 # error in this test set
                 ts = st.target_testcase.testset_report.reporting_test_set[]
-                record(ts, Test.Error(:nontest_error, Expr(:tuple), e, Base.catch_stack(), st.target_testcase.source))
+                Test.record(ts, Test.Error(:nontest_error, Expr(:tuple), e, Base.catch_stack(), st.target_testcase.source))
                 put!(results, (
                     scheduled_tests_index,
                     XUnit.DistributedAsyncTestMessage(st.target_testcase),

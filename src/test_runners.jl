@@ -426,7 +426,7 @@ function _run_scheduled_tests(
                 if !ishandled
                     orig_test_case = scheduled_tests[job_id].target_testcase
                     ts = orig_test_case.testset_report.reporting_test_set[]
-                    record(ts, Error(
+                    Test.record(ts, Test.Error(
                         :nontest_error,
                         Expr(:tuple),
                         "An error occurred in the worker test-runner process.",
