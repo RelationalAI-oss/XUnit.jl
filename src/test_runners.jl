@@ -36,24 +36,32 @@ function _run_testsuite(
     ::Type{T},
     testsuite::AsyncTestSuite,
 ) where T <: DistributedTestRunner
-    scheduled_tests = _schedule_tests(T, testsuite)
-    tls = task_local_storage()
-    already_running = haskey(tls, :__ALREADY_RUNNING_DISTRIBUTED_TESTS__)
-    if myid() == 1
-        @assert !already_running
-        try
-            tls[:__ALREADY_RUNNING_DISTRIBUTED_TESTS__] = true
-            _run_scheduled_tests(T, scheduled_tests)
-        finally
-            delete!(tls, :__ALREADY_RUNNING_DISTRIBUTED_TESTS__)
+    try
+        scheduled_tests = _schedule_tests(T, testsuite)
+        tls = task_local_storage()
+        already_running = haskey(tls, :__ALREADY_RUNNING_DISTRIBUTED_TESTS__)
+        if myid() == 1
+            @assert !already_running
+            # the main process starts the workers
+            try
+                tls[:__ALREADY_RUNNING_DISTRIBUTED_TESTS__] = true
+                _run_scheduled_tests(T, scheduled_tests)
+            finally
+                delete!(tls, :__ALREADY_RUNNING_DISTRIBUTED_TESTS__)
+            end
+            return true
+        else
+            # each worker processes the scheduled tests (in `SharedDistributedCode.do_work`)
+            # The scheduled tests are assigned to a global variable on the worker processes
+            @assert !isdefined(Main, :__SCHEDULED_DISTRIBUTED_TESTS__) "Main.__SCHEDULED_DISTRIBUTED_TESTS__ IS defined on process $(myid())"
+            Core.eval(Main, Expr(:(=), :__SCHEDULED_DISTRIBUTED_TESTS__, scheduled_tests))
+            return false
         end
-        return true
-    else
-        @assert !isdefined(Main, :__SCHEDULED_DISTRIBUTED_TESTS__) "Main.__SCHEDULED_DISTRIBUTED_TESTS__ IS defined on process $(myid())"
-        Core.eval(Main, Expr(:(=), :__SCHEDULED_DISTRIBUTED_TESTS__, scheduled_tests))
+    finally
+        # This is a fail-safe to avoid ending up with ghost worker processes waiting for
+        # `Main.__SCHEDULED_DISTRIBUTED_TESTS__` to be assigned
+        Core.eval(Main, Expr(:(=), :__RUN_DISTRIBUTED_TESTS_CALLED__, true))
     end
-
-    return false
 end
 
 mutable struct ScheduledTest
