@@ -3,6 +3,7 @@ module XUnit
 import Test
 using Test: AbstractTestSet, Result, Fail, Broken, Pass, Error
 using Test: get_testset_depth, get_testset
+import TestReports: display_reporting_testset
 using TestReports
 using Random
 using Base.Threads
