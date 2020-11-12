@@ -11,7 +11,13 @@ function do_work(jobs, results) # define work function everywhere
         if Main.GLOBAL_HAS_XUNIT_STATE
             tls[:__XUNIT_STATE__] = Main.GLOBAL_XUNIT_STATE
         end
-        @assert isdefined(Main, :__SCHEDULED_DISTRIBUTED_TESTS__) "Main.__SCHEDULED_DISTRIBUTED_TESTS__ IS NOT defined on process $(myid())"
+        attempt_cnt = 1
+        while !isdefined(Main, :__SCHEDULED_DISTRIBUTED_TESTS__)
+            @info "Main.__SCHEDULED_DISTRIBUTED_TESTS__ IS NOT still defined on process $(myid())."
+            @info "Sleeping for a second (attempt #$(attempt_cnt))."
+            sleep(1)
+            attempt_cnt += 1
+        end
         scheduled_tests = Main.__SCHEDULED_DISTRIBUTED_TESTS__
 
         task_count = 0
