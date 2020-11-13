@@ -192,6 +192,17 @@ function run_single_testcase(
         # RNG is re-seeded with its own seed to ease reproduce a failed test
         Random.seed!(RNG.seed)
 
+        # we change the directory to the directory of test-case to make its direct
+        # `include`s (if any) work correctly
+        # Note: this will not work properly with multiple threads
+        # (i.e., `ParallelTestRunner`), as `cd` is a process-wide command and it changes the
+        # current directory for the whole process. Then, if you are/might be using
+        # `ParallelTestRunner`, you need to use `include`s with absolute paths in the body
+        # of test-cases.
+        saved_current_dir = pwd()
+        testcase_dir = dirname(string(sub_testcase.source.file))
+        isdir(testcase_dir) && cd(testcase_dir)
+
         for testsuite in parent_testsets
             testsuite.before_each_hook()
         end
@@ -199,6 +210,9 @@ function run_single_testcase(
         for testsuite in reverse(parent_testsets)
             testsuite.after_each_hook()
         end
+
+        # restore the current directory
+        cd(saved_current_dir)
     catch err
         err isa InterruptException && rethrow()
         # something in the test block threw an error. Count that as an
