@@ -231,6 +231,17 @@ function run_single_testcase(
         # RNG is re-seeded with its own seed to ease reproduce a failed test
         Random.seed!(RNG.seed)
 
+        # we change the directory to the directory of test-case to make its direct
+        # `include`s (if any) work correctly
+        # Note: this will not work properly with multiple threads
+        # (i.e., `ParallelTestRunner`), as `cd` is a process-wide command and it changes the
+        # current directory for the whole process. Then, if you are/might be using
+        # `ParallelTestRunner`, you need to use `include`s with absolute paths in the body
+        # of test-cases.
+        saved_current_dir = pwd()
+        testcase_dir = dirname(string(sub_testcase.source.file))
+        isdir(testcase_dir) && cd(testcase_dir)
+
         for testsuite in parent_testsets
             testsuite.before_each_hook()
         end
@@ -238,6 +249,9 @@ function run_single_testcase(
         for testsuite in reverse(parent_testsets)
             testsuite.after_each_hook()
         end
+
+        # restore the current directory
+        cd(saved_current_dir)
     catch err
         err isa InterruptException && rethrow()
         # something in the test block threw an error. Count that as an
@@ -258,6 +272,36 @@ end
 
 function _get_path(testsuite_stack)
     join(map(testsuite -> testsuite.testset_report.description, testsuite_stack), "/")
+end
+
+"""
+    @async_with_error_log expr
+    @async_with_error_log "..error msg.." expr
+
+Exactly like `@async`, except that it wraps `expr` in a try/catch block that will print any
+exceptions that are thrown from the `expr` to stderr, via `@error`. You can
+optionally provide an error message that will be printed before the exception is displayed.
+
+This is useful if you need to asynchronously run a "background task", whose result will
+never be waited-on nor fetched-from.
+"""
+macro async_with_error_log(expr)
+    _async_with_error_log_expr(expr)
+end
+macro async_with_error_log(message, expr)
+    _async_with_error_log_expr(expr, message)
+end
+function _async_with_error_log_expr(expr, message="")
+    e = gensym("err")
+    return esc(quote
+        $Base.Threads.@async try
+            $(expr)
+        catch $e
+            $Base.@error "@async_with_error_log failed: $($message)" $e
+            $showerror(stderr, $e, $catch_backtrace())
+            rethrow()
+        end
+    end)
 end
 
 function _finalize_reports(testsuite::TEST_SUITE)::TEST_SUITE where TEST_SUITE <: AsyncTestSuite

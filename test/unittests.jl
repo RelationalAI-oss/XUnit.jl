@@ -70,6 +70,7 @@ function schedule_tests()
                     @test 222 == 222
                     @test 332 == 322
                     @test 442 == 442
+                    include("sub-unittests.jl")
                 end
             end
             @testcase "Child XTest 3" begin
