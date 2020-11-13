@@ -234,3 +234,33 @@ end
 function _get_path(testsuite_stack)
     join(map(testsuite -> testsuite.testset_report.description, testsuite_stack), "/")
 end
+
+"""
+    @async_with_error_log expr
+    @async_with_error_log "..error msg.." expr
+
+Exactly like `@async`, except that it wraps `expr` in a try/catch block that will print any
+exceptions that are thrown from the `expr` to stderr, via `@error`. You can
+optionally provide an error message that will be printed before the exception is displayed.
+
+This is useful if you need to asynchronously run a "background task", whose result will
+never be waited-on nor fetched-from.
+"""
+macro async_with_error_log(expr)
+    _async_with_error_log_expr(expr)
+end
+macro async_with_error_log(message, expr)
+    _async_with_error_log_expr(expr, message)
+end
+function _async_with_error_log_expr(expr, message="")
+    e = gensym("err")
+    return esc(quote
+        $Base.Threads.@async try
+            $(expr)
+        catch $e
+            $Base.@error "@async_with_error_log failed: $($message)" $e
+            $showerror(stderr, $e, $catch_backtrace())
+            rethrow()
+        end
+    end)
+end
