@@ -328,6 +328,7 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
             copy!(RNG, oldrng)
             Test.pop_testset()
             if $is_testset
+                # for a top-level `@testset`, we also run the tests using `SequentialTestRunner`
                 if get_testset_depth() == 0
                     if run_testsuite(SequentialTestRunner, ret) && Test.TESTSET_PRINT_ENABLE[]
                         TestReports.display_reporting_testset(ts)

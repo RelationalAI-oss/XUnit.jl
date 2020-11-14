@@ -12,12 +12,17 @@ function do_work(jobs, results) # define work function everywhere
             tls[:__XUNIT_STATE__] = Main.GLOBAL_XUNIT_STATE
         end
         attempt_cnt = 1
-        while !isdefined(Main, :__SCHEDULED_DISTRIBUTED_TESTS__) && !isdefined(Main, :__RUN_DISTRIBUTED_TESTS_CALLED__)
+        # we wait until either tests get scheduled (indicated by `Main.__SCHEDULED_DISTRIBUTED_TESTS__`)
+        # or at least tried to get scheduled (indicated by `Main.__RUN_DISTRIBUTED_TESTS_CALLED__`)
+        while !isdefined(Main, :__SCHEDULED_DISTRIBUTED_TESTS__) &&
+              !isdefined(Main, :__RUN_DISTRIBUTED_TESTS_CALLED__)
             @info "Main.__SCHEDULED_DISTRIBUTED_TESTS__ IS NOT still defined on process $(myid())."
             @info "Sleeping for a second (attempt #$(attempt_cnt))."
             sleep(1)
             attempt_cnt += 1
         end
+        # If the test scheduling code encounters an error, then `Main.__RUN_DISTRIBUTED_TESTS_CALLED__`
+        # is defined but `Main.__SCHEDULED_DISTRIBUTED_TESTS__` won't be available.
         @assert isdefined(Main, :__SCHEDULED_DISTRIBUTED_TESTS__) "Main.__SCHEDULED_DISTRIBUTED_TESTS__ IS NOT defined on process $(myid())"
         scheduled_tests = Main.__SCHEDULED_DISTRIBUTED_TESTS__
 
@@ -67,7 +72,7 @@ function do_work(jobs, results) # define work function everywhere
             catch e
                 has_wrapped_exception(e, InterruptException) && rethrow()
 
-                println("A critical error occued in while running '$scheduled_test_name': ", e)
+                println("A critical error occued while running '$scheduled_test_name': ", e)
                 for s in stacktrace(catch_backtrace())
                     println(s)
                 end
@@ -75,7 +80,17 @@ function do_work(jobs, results) # define work function everywhere
                 # something in the test block threw an error. Count that as an
                 # error in this test set
                 ts = st.target_testcase.testset_report.reporting_test_set[]
-                Test.record(ts, Test.Error(:nontest_error, Expr(:tuple), e, Base.catch_stack(), st.target_testcase.source))
+                Test.record(
+                    ts,
+                    Test.Error(
+                        :nontest_error,
+                        Expr(:tuple),
+                        e,
+                        Base.catch_stack(),
+                        st.target_testcase.source
+                    )
+                )
+
                 put!(results, (
                     scheduled_tests_index,
                     XUnit.DistributedAsyncTestMessage(st.target_testcase),
@@ -92,9 +107,8 @@ function do_work(jobs, results) # define work function everywhere
             println(s)
         end
 
-        while true
-            put!(results, (0, nothing, myid()))
-        end
+        # cancel all remaining tests by putting an empty result with index `0`
+        put!(results, (0, nothing, myid()))
     end
 end
 

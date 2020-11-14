@@ -15,6 +15,8 @@ function run_testsuite(
     testsuite::TEST_SUITE,
     ::Type{T}=SequentialTestRunner
 )::Bool where {T <: TestRunner, TEST_SUITE <: AsyncTestSuite}
+    # if `_run_testsuite` returns false, then we do not proceed with finalizing the report
+    # as it means that tests haven't ran and will run seprately
     if _run_testsuite(T, testsuite)
         _finalize_reports(testsuite)
         gather_test_metrics(testsuite)
@@ -55,6 +57,10 @@ function _run_testsuite(
             # The scheduled tests are assigned to a global variable on the worker processes
             @assert !isdefined(Main, :__SCHEDULED_DISTRIBUTED_TESTS__) "Main.__SCHEDULED_DISTRIBUTED_TESTS__ IS defined on process $(myid())"
             Core.eval(Main, Expr(:(=), :__SCHEDULED_DISTRIBUTED_TESTS__, scheduled_tests))
+
+            # returning `false` here means: tests have not been ran
+            # the tests will run separately with an orchestration from the main process
+            # (cf. `_run_scheduled_tests(::Type{DistributedTestRunner}, ...)`)
             return false
         end
     finally
@@ -64,7 +70,7 @@ function _run_testsuite(
     end
 end
 
-mutable struct ScheduledTest
+struct ScheduledTest
     parent_testsets::Vector{AsyncTestSuite}
     target_testcase::AsyncTestCase
 end
@@ -340,6 +346,7 @@ function _finalize_reports(testcase::TEST_CASE)::TEST_CASE where TEST_CASE <: As
     return testcase
 end
 
+# pass variable named `nm` from process `src` to all other `target` processes
 function passobj(src::Int, target::AbstractVector{Int}, nm::Symbol; from_mod=Main, to_mod=Main)
     r = RemoteChannel(src)
     @spawnat(src, put!(r, getfield(from_mod, nm)))
@@ -354,7 +361,6 @@ macro passobj(src::Int, target, val, from_mod=:Main, tomod=:Main)
         passobj($(esc(src)), $(esc(target)), $(QuoteNode(val)); from_mod=$from_mod, to_mod=$tomod)
     end
 end
-
 
 function passobj(src::Int, target::Int, nm::Symbol; from_mod=Main, to_mod=Main)
     passobj(src, [target], nm; from_mod=from_mod, to_mod=to_mod)
@@ -371,14 +377,19 @@ function _run_scheduled_tests(
     ::Type{DistributedTestRunner},
     scheduled_tests::Vector{ScheduledTest},
 )
-    @everywhere include_string(Main, $(read(joinpath(@__DIR__, "shared_distributed_code.jl"), String)), "shared_distributed_code.jl")
-
     # if we have a single worker, then we run tests sequentially
     if nworkers() == 1
         return _run_scheduled_tests(SequentialTestRunner, scheduled_tests)
     end
 
-    # make sure to pass the test-state to the underlying threads (mostly for test filtering)
+    # put `SharedDistributedCode` module under `Main` on all processes
+    @everywhere include_string(
+        Main,
+        $(read(joinpath(@__DIR__, "shared_distributed_code.jl"), String)),
+        "shared_distributed_code.jl"
+    )
+
+    # make sure to pass the test-state to the worker processes (mostly for test filtering)
     parent_thread_tls = task_local_storage()
     has_xunit_state = haskey(parent_thread_tls, :__XUNIT_STATE__)
     xunit_state = if has_xunit_state
@@ -399,16 +410,29 @@ function _run_scheduled_tests(
 
     num_tests = length(scheduled_tests)
 
+    # jobs channel contains a list of scheduled test index and name tuples.
+    # the assumption is that the same list of tests gets scheduled on all worker processes
+    # and each worker process can take one element from this channel and run that specific
+    # test in the given index. We also pass the test name to do a double-check and make
+    # sure that our assumption (of having the same list of scheduled tests on all processes)
+    # is accurate and catch any inconsistencies (due to non-determinism in the test code).
     jobs = RemoteChannel(()->Channel{Tuple{Int,Option{String}}}(num_tests));
 
+    # each element in the results channel is a triple produced by worker processes
+    # the triple is (job_id, returned_test_case, worker):
+    #  - job_id: is an index from `scheduled_tests` or `0` (if an error occurs with a worker process)
+    #  - returned_test_case: is a simplified `AsyncTestCase` (as `DistributedAsyncTestMessage`)
+    #                        or `nothing` (if an error occurs with a worker process)
+    #  - worker: the worker index (returned by `myid()` on the worker process)
     results = RemoteChannel(
         () -> Channel{Tuple{Int,Option{DistributedAsyncTestMessage},Int}}(
-            num_tests + nworkers()
+            num_tests + nworkers() # as each worker process might also produce a failure message
         )
     );
 
     n = num_tests
 
+    # create jobs for worker processes to handle
     function make_jobs(scheduled_tests, num_workers::Int)
         last_i = 0
         try
@@ -418,17 +442,17 @@ function _run_scheduled_tests(
                 println("$i => $(tst.target_testcase.testset_report.description)")
                 last_i = i
             end
-        catch e
-            for i in last_i:length(scheduled_tests)
-                put!(jobs, (i, nothing))
+        finally
+            # at the end of all jobs, we put a sentinel for each worker process to know that
+            # it can peacefully die, as there will not be any further tests to run
+            for i in 1:num_workers
+                put!(jobs, (-1, nothing))
             end
-        end
-        for i in 1:num_workers
-            put!(jobs, (-1, nothing))
         end
     end
 
-    @async make_jobs(scheduled_tests, nworkers()); # feed the jobs channel with "n" jobs
+    # feed the jobs channel with "n" jobs
+    @async_with_error_log make_jobs(scheduled_tests, nworkers());
 
     function start_worker_processes(jobs, results)
         # Here, we first make sure that all workers are ready before giving them any task
@@ -460,13 +484,20 @@ function _run_scheduled_tests(
         end
     end
 
-    @async start_worker_processes(jobs, results)
+    # start the worker processes to handle the jobs and produce results
+    @async_with_error_log start_worker_processes(jobs, results)
 
     handled_scheduled_tests = falses(length(scheduled_tests))
 
     while n > 0 # collect results
         job_id, returned_test_case, worker = take!(results)
 
+        # `job_id == 0` means that a critical error occurred with one of worker processes
+        # then, we stop testing here and report results early by showing an error for all
+        # remaining tests
+        # Note: if some worker processes are still alive, they might continue processing
+        #       tests, but their produced results are not consumed anymore.
+        #       One approach to improve this is by limitting the size of `results` channel.
         if job_id == 0
             for (job_id, ishandled) in enumerate(handled_scheduled_tests)
                 if !ishandled
@@ -484,8 +515,10 @@ function _run_scheduled_tests(
             break
         end
 
+        # mark test as handled
         handled_scheduled_tests[job_id] = true
 
+        # update the test-case on the main process with the results returned from the worker
         orig_test_case = scheduled_tests[job_id].target_testcase
         if returned_test_case !== nothing
             orig_test_case.testset_report = returned_test_case.testset_report
@@ -498,6 +531,9 @@ function _run_scheduled_tests(
     end
 end
 
+# A simplified version of `AsyncTestCase` that can be safely transferred between processes
+#
+# Note: functions and exceptions are not safe to be transferred between processes
 struct DistributedAsyncTestMessage
     testset_report::AbstractTestSet
     source::LineNumberNode
