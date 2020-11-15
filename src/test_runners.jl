@@ -20,6 +20,7 @@ function run_testsuite(
     if _run_testsuite(T, testsuite)
         _finalize_reports(testsuite)
         gather_test_metrics(testsuite)
+        save_test_metrics(testsuite)
         return true
     end
     return false
@@ -121,8 +122,11 @@ function _run_scheduled_tests(
             println(" test-case...")
         end
         run_single_testcase(st.parent_testsets, st.target_testcase)
+        save_test_metrics(st.target_testcase)
     end
 end
+
+const METRIC_SAVE_LOCK = ReentrantLock()
 
 function _run_scheduled_tests(
     ::Type{ParallelTestRunner},
@@ -156,6 +160,11 @@ function _run_scheduled_tests(
                 print(read(std_io, String))
             end
             run_single_testcase(st.parent_testsets, st.target_testcase)
+            # writing to metrics collector concurrently might lead to concurrency issues if
+            # it's not thread-safe
+            @lock METRIC_SAVE_LOCK begin
+                save_test_metrics(st.target_testcase)
+            end
         end
     end
 end
@@ -192,6 +201,7 @@ function _run_testsuite(
                     println(" test-case...")
                 end
                 run_single_testcase(parent_testsets, sub_testcase)
+                save_test_metrics(sub_testcase)
             elseif Test.TESTSET_PRINT_ENABLE[]
                 printstyled("Skipping $path test-case...\n"; color=:light_black)
             end
@@ -513,10 +523,10 @@ function _run_scheduled_tests(
                 end
             end
             break
+        else
+            # mark test as handled
+            handled_scheduled_tests[job_id] = true
         end
-
-        # mark test as handled
-        handled_scheduled_tests[job_id] = true
 
         # update the test-case on the main process with the results returned from the worker
         orig_test_case = scheduled_tests[job_id].target_testcase
@@ -525,6 +535,7 @@ function _run_scheduled_tests(
             orig_test_case.sub_testsuites = map(msg -> AsyncTestSuite(orig_test_case, msg), returned_test_case.sub_testsuites)
             orig_test_case.sub_testcases = map(msg -> AsyncTestCase(orig_test_case, msg), returned_test_case.sub_testcases)
             orig_test_case.metrics = returned_test_case.metrics
+            save_test_metrics(orig_test_case)
         end
 
         n = n - 1

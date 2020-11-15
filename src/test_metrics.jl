@@ -29,28 +29,20 @@ end
 function gather_test_metrics end
 
 function gather_test_metrics(t::AsyncTestSuite)
-    t.disabled && return nothing
+    if !t.disabled
+        for sub_testsuite in t.sub_testsuites
+            gather_test_metrics(sub_testsuite)
+            combine_test_metrics(t, sub_testsuite)
+        end
 
-    for sub_testsuite in t.sub_testsuites
-        gather_test_metrics(sub_testsuite)
-        combine_test_metrics(t, sub_testsuite)
+        for sub_testcase in t.sub_testcases
+            combine_test_metrics(t, sub_testcase)
+        end
     end
-
-    for sub_testcase in t.sub_testcases
-        combine_test_metrics(t, sub_testcase)
-    end
-
-    save_test_metrics(t.testset_report, t.metrics)
-
-    return nothing
 end
 
 function gather_test_metrics(t::AsyncTestCase)
-    t.disabled && return nothing
-
-    gather_test_metrics(t.test_fn, t)
-
-    return nothing
+    !t.disabled && gather_test_metrics(t.test_fn, t)
 end
 
 function gather_test_metrics(fn::Function, t::AsyncTestCase)
@@ -69,9 +61,21 @@ function gather_test_metrics(fn::Function, ts::AbstractTestSet, m::DefaultTestMe
     m.gctime = gctime
     m.gcstats = memallocs
 
-    save_test_metrics(ts, m)
-
     return val
+end
+
+function save_test_metrics(ts::AsyncTestCase)
+    !ts.disabled && save_test_metrics(ts.testset_report, ts.metrics)
+end
+
+function save_test_metrics(ts::AsyncTestSuite)
+    if !ts.disabled
+        for sub_testsuite in ts.sub_testsuites
+            save_test_metrics(sub_testsuite)
+        end
+
+        save_test_metrics(ts.testset_report, ts.metrics)
+    end
 end
 
 function save_test_metrics(::AbstractTestSet, ::Option{DefaultTestMetrics})
