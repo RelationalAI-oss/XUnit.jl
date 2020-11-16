@@ -27,12 +27,12 @@ struct AsyncTestSuite
     testset_report::AbstractTestSet
     parent_testsuite::Option{Union{_AsyncTestCase{AsyncTestSuite}, AsyncTestSuite}}
     before_each_hook::Function
+    after_each_hook::Function
+    source::LineNumberNode
+    disabled::Bool
     sub_testsuites::Vector{AsyncTestSuite}
     sub_testcases::Vector{_AsyncTestCase{AsyncTestSuite}}
-    after_each_hook::Function
-    disabled::Bool
     modify_lock::ReentrantLock
-    source::LineNumberNode
 end
 
 const AsyncTestCase = _AsyncTestCase{AsyncTestSuite}
@@ -52,12 +52,12 @@ function AsyncTestSuite(
         testset_report,
         parent_testsuite,
         before_each,
+        after_each,
+        source,
+        disabled,
         sub_testsuites,
         sub_testcases,
-        after_each,
-        disabled,
         ReentrantLock(),
-        source,
     )
     if parent_testsuite !== nothing
         lock(parent_testsuite.modify_lock) do
@@ -70,8 +70,8 @@ end
 function AsyncTestCase(
     test_fn::Function,
     testset_report::AbstractTestSet,
-    parent_testsuite::Option{AsyncTestSuiteOrTestCase},
-    source::LineNumberNode;
+    source::LineNumberNode,
+    parent_testsuite::Option{AsyncTestSuiteOrTestCase};
     disabled::Bool=false,
 )
     instance = AsyncTestCase(
@@ -426,7 +426,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                 else
                     quote
                         testsuite_or_testcase = if shouldrun
-                            testcase_obj = AsyncTestCase(ts, parent_testsuite_obj, $(QuoteNode(source)); disabled=!shouldrun, $(esc(hook_fn_options))...) do
+                            testcase_obj = AsyncTestCase(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...) do
                                 $(esc(ts_expr))
                             end
 
@@ -450,7 +450,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                             end
                             testcase_obj
                         else
-                            AsyncTestCase(ts, parent_testsuite_obj, $(QuoteNode(source)); disabled=!shouldrun, $(esc(hook_fn_options))...) do
+                            AsyncTestCase(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...) do
                                 nothing
                             end
                         end
