@@ -69,7 +69,7 @@ function _run_scheduled_tests(
     scheduled_tests::Vector{ScheduledTest},
 ) where T <: TestRunner
     for st in scheduled_tests
-        if Test.TESTSET_PRINT_ENABLE[]
+        if TESTSET_PRINT_ENABLE[]
             path = _get_path(vcat(st.parent_testsets, [st.target_testcase]))
             print("* Running ")
             printstyled(path; bold=true)
@@ -100,7 +100,7 @@ function _run_scheduled_tests(
             i <= 0 && break
 
             st = scheduled_tests[i]
-            if Test.TESTSET_PRINT_ENABLE[]
+            if TESTSET_PRINT_ENABLE[]
                 path = _get_path(vcat(st.parent_testsets, [st.target_testcase]))
                 std_io = IOBuffer()
                 print(std_io, "-> Running ")
@@ -123,35 +123,35 @@ function _run_testsuite(
     parent_testsets = vcat(parent_testsets, [testsuite])
     suite_path = _get_path(parent_testsets)
     if !testsuite.disabled
-        if Test.TESTSET_PRINT_ENABLE[]
+        if TESTSET_PRINT_ENABLE[]
             print("Running ")
             printstyled(suite_path; bold=true)
             println(" test-suite...")
         end
         for sub_testsuite in testsuite.sub_testsuites
-            if Test.TESTSET_PRINT_ENABLE[]
+            if TESTSET_PRINT_ENABLE[]
                 print("  "^length(parent_testsets))
             end
             _run_testsuite(SequentialTestRunner, sub_testsuite, parent_testsets)
         end
 
         for sub_testcase in testsuite.sub_testcases
-            if Test.TESTSET_PRINT_ENABLE[]
+            if TESTSET_PRINT_ENABLE[]
                 print("  "^length(parent_testsets))
             end
             path = _get_path(vcat(parent_testsets, [sub_testcase]))
             if !sub_testcase.disabled
-                if Test.TESTSET_PRINT_ENABLE[]
+                if TESTSET_PRINT_ENABLE[]
                     print("Running ")
                     printstyled(path; bold=true)
                     println(" test-case...")
                 end
                 run_single_testcase(parent_testsets, sub_testcase)
-            elseif Test.TESTSET_PRINT_ENABLE[]
+            elseif TESTSET_PRINT_ENABLE[]
                 printstyled("Skipping $path test-case...\n"; color=:light_black)
             end
         end
-    elseif Test.TESTSET_PRINT_ENABLE[]
+    elseif TESTSET_PRINT_ENABLE[]
         printstyled("Skipping $suite_path test-suite...\n"; color=:light_black)
     end
     return testsuite
@@ -171,7 +171,7 @@ function run_single_testcase(
     @assert !haskey(tls, :__TESTCASE_IS_RUNNING__)
     tls[:__TESTCASE_IS_RUNNING__] = sub_testcase
 
-    added_tls, rs = initialize_xunit_state(tls)
+    added_tls, rs = initialize_xunit_tls_state(tls)
 
     # start from an empty stack
     # this will have help with having proper indentation if a `@testset` appears under a `@testcase`
@@ -226,7 +226,7 @@ function run_single_testcase(
             pop!(rs.test_suites_stack)
         end
         close_testset(rs)
-        finalize_xunit_state(tls, added_tls)
+        finalize_xunit_tls_state(tls, added_tls)
         delete!(tls, :__TESTCASE_IS_RUNNING__)
     end
 end

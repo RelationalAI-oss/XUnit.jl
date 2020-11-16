@@ -1,7 +1,6 @@
 module UnitTests
 
 using XUnit
-import Test
 
 function fn_throws()
     throw(KeyError("Test error!"))
@@ -157,13 +156,13 @@ function schedule_tests()
 end
 
 function run_tests_and_report()
-    Test.TESTSET_PRINT_ENABLE[] = true
+    XUnit.TESTSET_PRINT_ENABLE[] = true
     println("Running tests with $(Threads.nthreads()) threads")
     testsuite = schedule_tests()
     # run_testsuite(SequentialTestRunner, testsuite)
     # run_testsuite(ShuffledTestRunner, testsuite)
     run_testsuite(ParallelTestRunner, testsuite)
-    html_report!(testsuite; show_stdout=Test.TESTSET_PRINT_ENABLE[])
+    html_report!(testsuite; show_stdout=XUnit.TESTSET_PRINT_ENABLE[])
     run(`open ./$(html_output(testsuite))`)
 end
 
