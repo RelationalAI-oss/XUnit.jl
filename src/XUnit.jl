@@ -12,29 +12,30 @@ const Option{T} = Union{Nothing,T}
 
 # BEGIN AsyncTestSuite and AsyncTestCase
 
-struct AsyncTestCase
+struct _AsyncTestCase{ASYNC_TEST_SUITE}
     testset_report::AbstractTestSet
-    parent_testsuite#::Option{AsyncTestSuiteOrTestCase}
+    parent_testsuite::Option{Union{_AsyncTestCase{ASYNC_TEST_SUITE}, ASYNC_TEST_SUITE}}
     test_fn::Function
     source::LineNumberNode
     disabled::Bool
-    sub_testsuites::Vector#{AsyncTestSuite}
-    sub_testcases::Vector{AsyncTestCase}
+    sub_testsuites::Vector{ASYNC_TEST_SUITE}
+    sub_testcases::Vector{_AsyncTestCase{ASYNC_TEST_SUITE}}
     modify_lock::ReentrantLock
 end
 
 struct AsyncTestSuite
     testset_report::AbstractTestSet
-    parent_testsuite#::Option{AsyncTestSuiteOrTestCase}
+    parent_testsuite::Option{Union{_AsyncTestCase{AsyncTestSuite}, AsyncTestSuite}}
     before_each_hook::Function
     sub_testsuites::Vector{AsyncTestSuite}
-    sub_testcases::Vector{AsyncTestCase}
+    sub_testcases::Vector{_AsyncTestCase{AsyncTestSuite}}
     after_each_hook::Function
     disabled::Bool
     modify_lock::ReentrantLock
     source::LineNumberNode
 end
 
+const AsyncTestCase = _AsyncTestCase{AsyncTestSuite}
 const AsyncTestSuiteOrTestCase = Union{AsyncTestSuite,AsyncTestCase}
 
 function AsyncTestSuite(
@@ -43,7 +44,7 @@ function AsyncTestSuite(
     parent_testsuite::Option{AsyncTestSuiteOrTestCase}=nothing;
     before_each::Function = () -> nothing,
     sub_testsuites::Vector{AsyncTestSuite} = AsyncTestSuite[],
-    sub_testcases::Vector{AsyncTestSuite} = AsyncTestSuite[],
+    sub_testcases::Vector{AsyncTestCase} = AsyncTestCase[],
     after_each::Function = () -> nothing,
     disabled::Bool = false,
 )
