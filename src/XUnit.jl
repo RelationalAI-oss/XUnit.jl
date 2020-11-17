@@ -304,10 +304,11 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
 
     desc, testsettype, options = Test.parse_testset_args(args[1:end-1])
 
-    function filter_hooks_fn(a)
-        a.head == :call &&
-        a.args[1] == :(=>) &&
-        (a.args[2] in TEST_SUITE_HOOK_FUNCTION_PARAMETER_NAMES && !is_testcase)
+    # `option` is a tuple creating expression that represents a key-value option
+    function filter_hooks_fn(option)
+        option.head == :call &&
+        option.args[1] == :(=>) &&
+        (option.args[2] in TEST_SUITE_HOOK_FUNCTION_PARAMETER_NAMES && !is_testcase)
     end
 
     # separate hook functions from other params
