@@ -195,11 +195,11 @@ function run_single_testcase(
         # RNG is re-seeded with its own seed to ease reproduce a failed test
         Random.seed!(RNG.seed)
 
-        # we change the source path directory to the directory of test-case to make its direct
-        # `include`s (if any) work correctly
-        testcase_dir = dirname(string(sub_testcase.source.file))
-        if isdir(testcase_dir)
-            tls[:SOURCE_PATH] = testcase_dir
+        # we change the source path directory to the path of the test-case to make its
+        # direct `include`s (if any) work correctly
+        testcase_path = string(sub_testcase.source.file)
+        if ispath(testcase_path)
+            tls[:SOURCE_PATH] = testcase_path
         end
 
         for testsuite in parent_testsets
