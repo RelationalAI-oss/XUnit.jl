@@ -115,7 +115,7 @@ function _run_scheduled_tests(
     scheduled_tests::Vector{ScheduledTest},
 ) where T <: TestRunner
     for st in scheduled_tests
-        if Test.TESTSET_PRINT_ENABLE[]
+        if TESTSET_PRINT_ENABLE[]
             path = _get_path(vcat(st.parent_testsets, [st.target_testcase]))
             print("* Running ")
             printstyled(path; bold=true)
@@ -149,7 +149,7 @@ function _run_scheduled_tests(
             i <= 0 && break
 
             st = scheduled_tests[i]
-            if Test.TESTSET_PRINT_ENABLE[]
+            if TESTSET_PRINT_ENABLE[]
                 path = _get_path(vcat(st.parent_testsets, [st.target_testcase]))
                 std_io = IOBuffer()
                 print(std_io, "-> Running ")
@@ -177,36 +177,36 @@ function _run_testsuite(
     parent_testsets = vcat(parent_testsets, [testsuite])
     suite_path = _get_path(parent_testsets)
     if !testsuite.disabled
-        if Test.TESTSET_PRINT_ENABLE[]
+        if TESTSET_PRINT_ENABLE[]
             print("Running ")
             printstyled(suite_path; bold=true)
             println(" test-suite...")
         end
         for sub_testsuite in testsuite.sub_testsuites
-            if Test.TESTSET_PRINT_ENABLE[]
+            if TESTSET_PRINT_ENABLE[]
                 print("  "^length(parent_testsets))
             end
             _run_testsuite(SequentialTestRunner, sub_testsuite, parent_testsets)
         end
 
         for sub_testcase in testsuite.sub_testcases
-            if Test.TESTSET_PRINT_ENABLE[]
+            if TESTSET_PRINT_ENABLE[]
                 print("  "^length(parent_testsets))
             end
             path = _get_path(vcat(parent_testsets, [sub_testcase]))
             if !sub_testcase.disabled
-                if Test.TESTSET_PRINT_ENABLE[]
+                if TESTSET_PRINT_ENABLE[]
                     print("Running ")
                     printstyled(path; bold=true)
                     println(" test-case...")
                 end
                 run_single_testcase(parent_testsets, sub_testcase)
                 save_test_metrics(sub_testcase)
-            elseif Test.TESTSET_PRINT_ENABLE[]
+            elseif TESTSET_PRINT_ENABLE[]
                 printstyled("Skipping $path test-case...\n"; color=:light_black)
             end
         end
-    elseif Test.TESTSET_PRINT_ENABLE[]
+    elseif TESTSET_PRINT_ENABLE[]
         printstyled("Skipping $suite_path test-suite...\n"; color=:light_black)
     end
     return true
@@ -226,7 +226,7 @@ function run_single_testcase(
     @assert !haskey(tls, :__TESTCASE_IS_RUNNING__)
     tls[:__TESTCASE_IS_RUNNING__] = sub_testcase
 
-    added_tls, rs = initialize_xunit_state(tls)
+    added_tls, rs = initialize_xunit_tls_state(tls)
 
     # start from an empty stack
     # this will have help with having proper indentation if a `@testset` appears under a `@testcase`
@@ -243,20 +243,19 @@ function run_single_testcase(
     # by wrapping the body in a function
     local RNG = Random.default_rng()
     local oldrng = copy(RNG)
+
+    has_saved_source_path = haskey(tls, :SOURCE_PATH)
+    saved_source_path = has_saved_source_path ? tls[:SOURCE_PATH] : nothing
     try
         # RNG is re-seeded with its own seed to ease reproduce a failed test
         Random.seed!(RNG.seed)
 
-        # we change the directory to the directory of test-case to make its direct
+        # we change the source path directory to the directory of test-case to make its direct
         # `include`s (if any) work correctly
-        # Note: this will not work properly with multiple threads
-        # (i.e., `ParallelTestRunner`), as `cd` is a process-wide command and it changes the
-        # current directory for the whole process. Then, if you are/might be using
-        # `ParallelTestRunner`, you need to use `include`s with absolute paths in the body
-        # of test-cases.
-        saved_current_dir = pwd()
         testcase_dir = dirname(string(sub_testcase.source.file))
-        isdir(testcase_dir) && cd(testcase_dir)
+        if isdir(testcase_dir)
+            tls[:SOURCE_PATH] = testcase_dir
+        end
 
         for testsuite in parent_testsets
             testsuite.before_each_hook()
@@ -265,9 +264,6 @@ function run_single_testcase(
         for testsuite in reverse(parent_testsets)
             testsuite.after_each_hook()
         end
-
-        # restore the current directory
-        cd(saved_current_dir)
     catch err
         err isa InterruptException && rethrow()
         # something in the test block threw an error. Count that as an
@@ -281,8 +277,15 @@ function run_single_testcase(
             pop!(rs.test_suites_stack)
         end
         close_testset(rs)
-        finalize_xunit_state(tls, added_tls)
+        finalize_xunit_tls_state(tls, added_tls)
         delete!(tls, :__TESTCASE_IS_RUNNING__)
+
+        # restore the saved source path
+        if has_saved_source_path
+            tls[:SOURCE_PATH] = saved_source_path
+        else
+            delete!(tls, :SOURCE_PATH)
+        end
     end
 end
 
