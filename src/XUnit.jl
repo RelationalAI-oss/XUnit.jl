@@ -356,12 +356,14 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
         finally
             copy!(RNG, oldrng)
             Test.pop_testset()
-            if !is_errored && $is_testset
-                if get_testset_depth() == 0
-                    run_testsuite(SequentialTestRunner, ret)
-                    if TESTSET_PRINT_ENABLE[]
-                        TestReports.display_reporting_testset(ts)
-                    end
+            if !is_errored && $is_testset && get_testset_depth() == 0
+                # if there was no error during the scheduling and it's the topmost `@testset`
+                # (not enclosed in a `@testsuite`) then we want to run the scheduled tests
+                # using the `SequentialTestRunner` to keep the same semantics of `@testset`
+                # in `Base.Test`
+                run_testsuite(SequentialTestRunner, ret)
+                if TESTSET_PRINT_ENABLE[]
+                    TestReports.display_reporting_testset(ts)
                 end
             end
         end
