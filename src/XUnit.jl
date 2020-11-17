@@ -49,9 +49,9 @@ function AsyncTestSuite(
     source::LineNumberNode,
     parent_testsuite::Option{AsyncTestSuiteOrTestCase}=nothing;
     before_each::Function = () -> nothing,
+    after_each::Function = () -> nothing,
     sub_testsuites::Vector{AsyncTestSuite} = AsyncTestSuite[],
     sub_testcases::Vector{AsyncTestCase} = AsyncTestCase[],
-    after_each::Function = () -> nothing,
     disabled::Bool = false,
     metrics = nothing,
 )

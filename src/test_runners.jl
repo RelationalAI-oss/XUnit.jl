@@ -577,8 +577,8 @@ function AsyncTestCase(parent, msg::DistributedAsyncTestMessage)
         msg.disabled,
         AsyncTestSuite[],
         AsyncTestCase[],
-        ReentrantLock(),
         msg.metrics,
+        ReentrantLock(),
     )
 
     for sub_testsuite in msg.sub_testsuites
@@ -597,13 +597,13 @@ function AsyncTestSuite(parent::AsyncTestSuiteOrTestCase, msg::DistributedAsyncT
         msg.testset_report,
         parent,
         () -> nothing,
+        () -> nothing,
+        msg.source,
+        msg.disabled,
         AsyncTestSuite[],
         AsyncTestCase[],
-        () -> nothing,
-        msg.disabled,
-        ReentrantLock(),
-        msg.source,
         msg.metrics,
+        ReentrantLock(),
     )
 
     for sub_testsuite in msg.sub_testsuites
