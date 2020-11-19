@@ -14,7 +14,7 @@ const Option{T} = Union{Nothing,T}
 
 struct _AsyncTestCase{ASYNC_TEST_SUITE}
     testset_report::AbstractTestSet
-    parent_testsuite::Option{Union{_AsyncTestCase{ASYNC_TEST_SUITE}, ASYNC_TEST_SUITE}}
+    parent_testsuite::Option{Union{_AsyncTestCase{ASYNC_TEST_SUITE},ASYNC_TEST_SUITE}}
     test_fn::Function
     source::LineNumberNode
     disabled::Bool
@@ -25,7 +25,7 @@ end
 
 struct AsyncTestSuite
     testset_report::AbstractTestSet
-    parent_testsuite::Option{Union{_AsyncTestCase{AsyncTestSuite}, AsyncTestSuite}}
+    parent_testsuite::Option{Union{_AsyncTestCase{AsyncTestSuite},AsyncTestSuite}}
     before_each_hook::Function
     after_each_hook::Function
     source::LineNumberNode
@@ -296,6 +296,8 @@ macro testsuite(args...)
 end
 
 """
+    testsuite_beginend(args, tests, source, suite_type::SuiteType)
+
 Generate the code for a `@testsuite` with a `begin`/`end` argument
 """
 function testsuite_beginend(args, tests, source, suite_type::SuiteType)
@@ -508,7 +510,7 @@ Defines a self-contained test-case.
 
 Test-cases are gathered at scheduling time and will get executed using a test-runner.
 As a test-runner can run tests in any order (and even on multiple threads/processes), it's
-stringly advised that test-cases be independent and do not depend on each other.
+strongly advised that test-cases do not depend on each other.
 """
 macro testcase(args...)
     isempty(args) && error("No arguments to @testcase")
@@ -587,7 +589,11 @@ macro testset(args...)
 end
 
 """
+    testset_forloop(args, testloop, source)
+
 Generate the code for a `@testset` with a `for` loop argument
+
+Note: It's not supported yet.
 """
 function testset_forloop(args, testloop, source)
     error("For loop in `XUnit.@testset` is not supported.")
@@ -646,6 +652,8 @@ function runtests(fun::Function, depth::Int64=typemax(Int64), args...)
 end
 
 """
+    runtests(filepath::String, args...)
+
 Include file `filepath` and execute test sets matching the regular expressions
 in `args`.  See alternative form of `runtests` for examples.
 """
@@ -662,6 +670,8 @@ function runtests(filepath::String, args...)
 end
 
 """
+    runtests(args::Vector{String})
+
 Include file `test/runtests.jl` and execute test sets matching the regular
 expressions in `args` (where a leading '-' or '¬' indicates that tests
 matching the expression should be excluded).
@@ -683,6 +693,8 @@ function runtests(args::Vector{String})
 end
 
 """
+    runtests(depth::Int, args...)
+
 Run test sets up to the provided nesting `depth` and matching the regular
 expressions in `args`.
 """

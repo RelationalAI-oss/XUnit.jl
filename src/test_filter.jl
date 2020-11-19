@@ -2,7 +2,7 @@
 # these functions.
 
 # Helper for `pmatch`: Mirrors Base.PCRE.exec
-function pexec(re, subject, offset, options, match_data)
+function _pexec(re, subject, offset, options, match_data)
     rc = ccall((:pcre2_match_8, Base.PCRE.PCRE_LIB), Cint,
                (Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Csize_t, Cuint, Ptr{Cvoid}, Ptr{Cvoid}),
                re, subject, sizeof(subject), offset, options, match_data,
@@ -18,11 +18,11 @@ function pexec(re, subject, offset, options, match_data)
         ((options & Base.PCRE.PARTIAL_HARD != 0 || options & Base.PCRE.PARTIAL_SOFT != 0) && rc == -2))
 end
 
-# Helper to call `pexec` w/ thread-safe match data: Mirrors Base.PCRE.exec_r_data
+# Helper to call `_pexec` w/ thread-safe match data: Mirrors Base.PCRE.exec_r_data
 # Only used for Julia Version >= v"1.3-"
-function pexec_r_data(re, subject, offset, options)
+function _pexec_r_data(re, subject, offset, options)
     match_data = Base.PCRE.create_match_data(re)
-    ans = pexec(re, subject, offset, options, match_data)
+    ans = _pexec(re, subject, offset, options, match_data)
     return ans, match_data
 end
 
@@ -37,7 +37,7 @@ function pmatch(re::Regex, str::Union{SubString{String}, String}, idx::Integer, 
     opts = re.match_options | add_opts
     @static if VERSION >= v"1.3-"
         # rc == -1 means no match, -2 means partial match.
-        matched, data = pexec_r_data(re.regex, str, idx-1, opts)
+        matched, data = _pexec_r_data(re.regex, str, idx-1, opts)
         if !matched
             Base.PCRE.free_match_data(data)
             return nothing
@@ -54,7 +54,7 @@ function pmatch(re::Regex, str::Union{SubString{String}, String}, idx::Integer, 
         return result
     else  #  Julia VERSION < v"1.3"
         # rc == -1 means no match, -2 means partial match.
-        matched = pexec(re.regex, str, idx-1, opts, re.match_data)
+        matched = _pexec(re.regex, str, idx-1, opts, re.match_data)
         if !matched
             return nothing
         end
@@ -75,12 +75,16 @@ pmatch(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
 ))
 
 """
+    partial(str::AbstractString)
+
 Constructs a regular expression to perform partial matching.
 """
 partial(str::AbstractString) = Regex(str, Base.DEFAULT_COMPILER_OPTS,
     Base.DEFAULT_MATCH_OPTS | Base.PCRE.PARTIAL_HARD)
 
 """
+    exact(str::AbstractString)
+
 Constructs a regular expression to perform exact maching.
 """
 exact(str::AbstractString) = Regex(str)
