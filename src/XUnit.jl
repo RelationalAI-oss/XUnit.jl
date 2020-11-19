@@ -4,6 +4,7 @@ using Base: @lock, ReentrantLock
 import Test
 using Test: AbstractTestSet, Result, Fail, Broken, Pass, Error
 using Test: TESTSET_PRINT_ENABLE, get_testset_depth, get_testset
+using Test: _check_testset, parse_testset_args, push_testset, pop_testset
 import TestReports: display_reporting_testset
 using TestReports
 using Random
@@ -268,6 +269,10 @@ defined under a `@testsuite` are executed sequentially at scheduling time.
   - `after_each`: a function to run after each underlying test-case
 """
 macro testsuite(args...)
+    return testsuite_handler(args, __source__)
+end
+
+function testsuite_handler(args, source)
     isempty(args) && error("No arguments to @testsuite")
 
     tests = args[end]
@@ -277,7 +282,7 @@ macro testsuite(args...)
         error("Expected begin/end block or for loop as argument to @testsuite")
     end
 
-    return testsuite_beginend(args, tests, __source__, TestSuiteType)
+    return testsuite_beginend(args, tests, source, TestSuiteType)
 end
 
 """
@@ -295,7 +300,7 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
     # another macro. In that case, source will refer to the upper macro's address, not the
     # place that tests are defined
     source = tests_is_block_with_location ? tests.args[1] : source
-    desc, testsettype, options = Test.parse_testset_args(args[1:end-1])
+    desc, testsettype, options = XUnit.parse_testset_args(args[1:end-1])
 
     # `option` is a tuple creating expression that represents a key-value option
     function filter_hooks_fn(option)
@@ -330,10 +335,10 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
     @assert tests.head == :block
     ex = quote
         # check that `testsettype` is a subtype of `AbstractTestSet` (otherwise, throw an error)
-        Test._check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
+        XUnit._check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         local ret = nothing
         local ts = $(testsettype)($desc; $options...)
-        Test.push_testset(ts)
+        XUnit.push_testset(ts)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
@@ -351,13 +356,13 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
             rethrow()
         finally
             copy!(RNG, oldrng)
-            Test.pop_testset()
+            XUnit.pop_testset()
             if !is_errored && $is_testset && get_testset_depth() == 0
                 # if there was no error during the scheduling and it's the topmost `@testset`
                 # (not enclosed in a `@testsuite`) then we want to run the scheduled tests
                 # using the `SequentialTestRunner` to keep the same semantics of `@testset`
                 # in `Base.Test`
-                if run_testsuite(SequentialTestRunner, ret) && Test.TESTSET_PRINT_ENABLE[]
+                if run_testsuite(SequentialTestRunner, ret) && XUnit.TESTSET_PRINT_ENABLE[]
                     TestReports.display_reporting_testset(ts)
                 end
             end
@@ -383,23 +388,23 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
         ts = get_testset()
 
         tls = task_local_storage()
-        added_tls, rs = initialize_xunit_tls_state(tls)
+        added_tls, rs = XUnit.initialize_xunit_tls_state(tls)
 
         local testsuite_or_testcase = nothing
 
         try
             std_io = IOBuffer()
-            if TESTSET_PRINT_ENABLE[]
+            if XUnit.TESTSET_PRINT_ENABLE[]
                 print(std_io, "  "^length(rs.stack))
             end
-            path = open_testset(rs, $name)
+            path = XUnit.open_testset(rs, $name)
             shouldrun = length(rs.stack) <= rs.maxdepth &&
-                    pmatch(rs.include, path) != nothing && pmatch(rs.exclude, path) == nothing
+                XUnit.pmatch(rs.include, path) != nothing && XUnit.pmatch(rs.exclude, path) == nothing
             rs.seen[path] = shouldrun
             parent_testsuite_obj = isempty(rs.test_suites_stack) ? nothing : last(rs.test_suites_stack)
 
             if shouldrun # if it's not disabled
-                if TESTSET_PRINT_ENABLE[]
+                if XUnit.TESTSET_PRINT_ENABLE[]
                     if $is_testcase && !haskey(tls, :__TESTCASE_IS_RUNNING__)
                         # if it's a `@testcase` NOT enclosed inside another `@testcase`,
                         # then it gets scheduled for running later
@@ -413,7 +418,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                     println(std_io, " tests...")
                 end
             else # skip disabled `@testsuite`s, `@testset`s, and `@testcase`s
-                if TESTSET_PRINT_ENABLE[]
+                if XUnit.TESTSET_PRINT_ENABLE[]
                     printstyled(std_io, "Skipped Scheduling $path tests...\n"; color=:light_black)
                 end
             end
@@ -425,7 +430,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
             $(
                 if !is_testcase #if it's a `@testsuite` or `@testset`, runs its body
                     quote
-                        testsuite_obj = AsyncTestSuite(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...)
+                        testsuite_obj = XUnit.AsyncTestSuite(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...)
 
                         push!(rs.test_suites_stack, testsuite_obj)
 
@@ -439,7 +444,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                             err isa InterruptException && rethrow()
                             # something in the test block threw an error. Count that as an
                             # error in this test set
-                            Test.record(ts, Test.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), testsuite_obj.source))
+                            XUnit.record(ts, XUnit.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), testsuite_obj.source))
                         finally
                             pop!(rs.test_suites_stack)
                         end
@@ -449,7 +454,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                 else
                     quote
                         testsuite_or_testcase = if shouldrun # if a `@testcase` is not disabled
-                            testcase_obj = AsyncTestCase(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...) do
+                            testcase_obj = XUnit.AsyncTestCase(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...) do
                                 $(esc(ts_expr))
                             end
 
@@ -462,19 +467,19 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                                     # like a testset and runs immediately
                                     # Note: `before_each` and `after_each` hooks are already
                                     # ran for the top-most test-case and won't run again
-                                    gather_test_metrics(testcase_obj)
+                                    XUnit.gather_test_metrics(testcase_obj)
                                 catch err
                                     err isa InterruptException && rethrow()
                                     # something in the test block threw an error. Count that as an
                                     # error in this test set
-                                    Test.record(ts, Test.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), testcase_obj.source))
+                                    XUnit.record(ts, XUnit.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), testcase_obj.source))
                                 finally
                                     pop!(rs.test_suites_stack)
                                 end
                             end
                             testcase_obj
                         else  # if a `@testcase` is disabled, skipt it
-                            AsyncTestCase(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...) do
+                            XUnit.AsyncTestCase(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...) do
                                 nothing
                             end
                         end
@@ -482,7 +487,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                 end
             )
         finally
-            close_testset(rs)
+            XUnit.close_testset(rs)
             if added_tls
                 delete!(tls, :__XUNIT_STATE__)
             end
@@ -506,6 +511,10 @@ As a test-runner can run tests in any order (and even on multiple threads/proces
 stringly advised that test-cases be independent and do not depend on each other.
 """
 macro testcase(args...)
+    return testcase_handler(args, __source__)
+end
+
+function testcase_handler(args, source)
     isempty(args) && error("No arguments to @testcase")
 
     tests = args[end]
@@ -515,7 +524,7 @@ macro testcase(args...)
         error("Expected begin/end block or for loop as argument to @testcase")
     end
 
-    return testsuite_beginend(args, tests, __source__, TestCaseType)
+    return testsuite_beginend(args, tests, source, TestCaseType)
 end
 
 # END TestCase

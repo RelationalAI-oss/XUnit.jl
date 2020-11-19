@@ -3,7 +3,7 @@ module SharedDistributedCode
 using Distributed
 using Test
 using ExceptionUnwrapping: has_wrapped_exception
-import XUnit
+using XUnit
 
 function do_work(jobs, results) # define work function everywhere
     try
@@ -51,7 +51,7 @@ function do_work(jobs, results) # define work function everywhere
                     break
                 end
 
-                if Test.TESTSET_PRINT_ENABLE[]
+                if XUnit.TESTSET_PRINT_ENABLE[]
                     path = XUnit._get_path(vcat(st.parent_testsets, [st.target_testcase]))
                     std_io = IOBuffer()
                     print(std_io, "-> Running ")
