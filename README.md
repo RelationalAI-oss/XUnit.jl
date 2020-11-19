@@ -40,6 +40,11 @@ In addition, there are two more macros provided:
 
  **Note**: it's suggested that `@testcase`s become the leaf nodes of your test hierarchy. Even though, for now, you can have other `@testset`s, `@testsuite`s or even `@testcase`s under a `@testcase`, where in this case, all those are considered the same (like a `@testset`) and will only impact the reporting, but won't have any impact on the execution of the tests, as still the top-most `@testcase` gets scheduled for deferred execution.
 
+**Note**:the body of a `@testsuite` always gets executed at scheduling time, as it
+needs to gather possible underlying `@testcase`s. Thus, it's a good practice to put your
+tests under a `@testcase` (instead of putting them under a `@testsuite`), as any tests
+defined under a `@testsuite` are executed sequentially at scheduling time.
+
 After scheduling the tests (which happens by capturing the output value of the topmost `@testsuite`), you can run the tests using `run_testsuite`, where you pass your desired test-runner as the first argument and your scheduled tests as the second argument. Here are the current test runners:
  - `SequentialTestRunner`: this is the default test-runner, which behaves similarly to `Base.Test` and runs all your tests sequentially using a single thread of execution.
  - `ShuffledTestRunner`: similar to `SequentialTestRunner`, it runs the tests using a single thread of execution, but it shuffles them and runs them in random order.
