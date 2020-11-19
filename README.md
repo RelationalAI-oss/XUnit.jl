@@ -21,9 +21,24 @@ Pkg.add("XUnit")
 
 ## Usage
 
-In addition to `@testset` and `@test*` macros provided by `Base.Test` (which were also re-exported from this package), there are two more macros provided:
-- `@testsuite`: is very similar to `@testset`, but it does not run the leaf test-cases, but only schedules them. On the contrary, `@testset` does the same, except that the top-level `@testset` (if not included inside a `@testsuite`) also runs all the scheduled tests sequentially. This deferred execution of test-cases is a big differentiator between `XUnit.jl` and `Base.Test`. Even though you can drop-in replace `XUnit.jl` with `Base.Test`, but we strongly recommend also replace your topmost `@testset` with `@testsuite` to benefit from deferred execution in different modes (i.e., shuffled, parallel, or distributed). This is done in the example below.
-- `@testcase`: is also very similar to `@testset` (and `@testsuite`), but the body of an `@testcase` is not executed right away. Instead, it gets scheduled for being executed later. As its name suggests, it's meant to encapsulate a test-case. It's suggested that `@testcase`s become the leaf nodes of your test hierarchy. Even though, for now, you can have other `@testset`s, `@testsuite`s or even `@testcase`s under a `@testcase`, where in this case, all those are considered the same (like a `@testset`) and will only impact the reporting, but won't have any impact on the execution of the tests, as still the top-most `@testcase` gets scheduled for deferred execution.
+`XUnit.jl` allows to organize your tests hierarchically.
+
+There are two concepts used for creating your test hierarchy:
+ - `test-suite`: is used for grouping other `test-suite`s and `test-case`s. It is important that a `test-suite` doesn't contain any code related to specific tests directly in its body. You can create a `test-suite` using `@testset` and `@testsuite` macros.
+ - `test-case`: is used for declaring a unit-test. You can think of `test-case`s as leaves of your test hierarchy. You can create a `test-case` using `@testcase` macro.
+
+Executing the tests using `XUnit.jl` happens in two phases:
+ - Scheduling: when Julia processes test hierarchy macros (`@testsuite` and `@testcase`), it doesn't immediately runs them. Instead, it output a representation of the `test-suite`.
+ - Running: After scheduling the tests, you have the choice of running the tests using a `test-runner`. Each `test-runner` has a different strategy for running the tests (explained below).
+
+`XUnit.jl` rewrites/re-exports `@testset` and `@test*` macros provided by `Base.Test` (and you need to use these macros directly from `XUnit` instead of `Test`).
+
+In addition, there are two more macros provided:
+
+ - `@testsuite`: is used for grouping other `@testsuite`s and `@testcase`s. This macro schedules the `@testsuite`s and `@testcase`s in its body (but does not run them). It is important that a `@testsuite` doesn't contain any code related to specific tests directly in its body. For backward compatibility with `Base.Test`, `@testset` is very similar to `@testsuite` with a distinction that a top-level `@testset` (if not included inside a `@testsuite`) also runs all the scheduled tests sequentially. This deferred execution of test-cases is a big differentiator between `XUnit.jl` and `Base.Test`. Even though you can drop-in replace `XUnit.jl` with `Base.Test`, but we strongly recommend also replace your topmost `@testset` with `@testsuite` to benefit from deferred execution in different modes (i.e., shuffled, parallel, or distributed). This is done in the example below.
+ - `@testcase`: is used for encapsulate a `test-case`. You can think of `@testcase`s as leaves of your test hierarchy. The body of an `@testcase` is not executed right away. Instead, it gets scheduled for being executed later.
+
+ **Note**: it's suggested that `@testcase`s become the leaf nodes of your test hierarchy. Even though, for now, you can have other `@testset`s, `@testsuite`s or even `@testcase`s under a `@testcase`, where in this case, all those are considered the same (like a `@testset`) and will only impact the reporting, but won't have any impact on the execution of the tests, as still the top-most `@testcase` gets scheduled for deferred execution.
 
 After scheduling the tests (which happens by capturing the output value of the topmost `@testsuite`), you can run the tests using `run_testsuite`, where you pass your desired test-runner as the first argument and your scheduled tests as the second argument. Here are the current test runners:
  - `SequentialTestRunner`: this is the default test-runner, which behaves similarly to `Base.Test` and runs all your tests sequentially using a single thread of execution.
