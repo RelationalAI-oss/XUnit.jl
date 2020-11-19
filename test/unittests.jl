@@ -164,7 +164,7 @@ function run_tests_and_report()
     # if run_testsuite(ShuffledTestRunner, testsuite)
     # if run_testsuite(ParallelTestRunner, testsuite)
     if run_testsuite(DistributedTestRunner, testsuite)
-        html_report!(testsuite; show_stdout=TESTSET_PRINT_ENABLE[])
+        html_report!(testsuite; show_stdout=XUnit.TESTSET_PRINT_ENABLE[])
         run(`open ./$(html_output(testsuite))`)
     end
 end
