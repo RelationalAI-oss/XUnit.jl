@@ -504,7 +504,7 @@ end
 # BEGIN TestCase
 
 """
-    @testsuite "test-case name" begin ... end
+    @testcase "test-case name" begin ... end
 
 Defines a self-contained test-case.
 
