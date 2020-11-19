@@ -287,6 +287,14 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
     is_testcase = suite_type == TestCaseType
     is_testset = suite_type == TestSetType
 
+    tests_is_block_with_location = tests isa Expr && tests.head === :block &&
+                                   !isempty(tests.args) && tests.args[1] isa LineNumberNode
+
+    # the location information inside `tests.args[1]` (if available) is more accurate
+    # The `source` passed to this function is not correct is this macro is called inside
+    # another macro. In that case, source will refer to the upper macro's address, not the
+    # place that tests are defined
+    source = tests_is_block_with_location ? tests.args[1] : source
     desc, testsettype, options = Test.parse_testset_args(args[1:end-1])
 
     # `option` is a tuple creating expression that represents a key-value option
@@ -357,7 +365,7 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
         ret
     end
     # preserve outer location if possible
-    if tests isa Expr && tests.head === :block && !isempty(tests.args) && tests.args[1] isa LineNumberNode
+    if tests_is_block_with_location
         ex = Expr(:block, tests.args[1], ex)
     end
     return ex
