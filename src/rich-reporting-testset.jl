@@ -234,6 +234,10 @@ function _flatten_results!(rich_ts::RichReportingTestSet)::Vector{<:AbstractTest
     return flattened_results
 end
 
+function _flatten_results!(ts::ReportingTestSet)::Vector{<:AbstractTestSet}
+    return TestReports._flatten_results!(ts)
+end
+
 """
     _flatten_results!(rs::Result)
 
