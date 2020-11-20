@@ -1,5 +1,3 @@
-using Distributed #for DistributedTestRunner
-
 abstract type TestRunner end
 struct SequentialTestRunner <: TestRunner end
 struct ShuffledTestRunner <: TestRunner end
@@ -654,5 +652,3 @@ function convert_results_to_be_transferrable(res::Pass)
     end
     return res
 end
-
-export DistributedTestRunner

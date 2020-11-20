@@ -1,6 +1,7 @@
 module XUnit
 
 using Base: @lock, ReentrantLock
+using Distributed #for DistributedTestRunner
 import Test
 using Test: AbstractTestSet, Result, Fail, Broken, Pass, Error
 using Test: TESTSET_PRINT_ENABLE, get_testset_depth, get_testset
