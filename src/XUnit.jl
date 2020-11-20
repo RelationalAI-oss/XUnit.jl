@@ -5,8 +5,8 @@ import Test
 using Test: AbstractTestSet, Result, Fail, Broken, Pass, Error
 using Test: TESTSET_PRINT_ENABLE, get_testset_depth, get_testset
 using Test: _check_testset, parse_testset_args, push_testset, pop_testset
-import TestReports: display_reporting_testset
 using TestReports
+using TestReports: display_reporting_testset
 using Random
 using Base.Threads
 using EzXML
@@ -302,6 +302,18 @@ function testsuite_handler(args, source)
     end
 
     return testsuite_beginend(args, tests, source, TestSuiteType)
+end
+
+"""
+    get_block_source(e)
+
+A utility function for extracting the source information from a block expression
+"""
+function get_block_source(e)
+    if e.head === :block && !isempty(e.args) && e.args[1] isa LineNumberNode
+        return e.args[1]
+    end
+    return nothing
 end
 
 """
@@ -761,6 +773,6 @@ export AbstractTestSet, DefaultTestSet, record, finish
 export TestRunner
 export SequentialTestRunner, ShuffledTestRunner, ParallelTestRunner, DistributedTestRunner
 export TestMetrics, DefaultTestMetrics
-export gather_test_metrics, combine_test_metrics, save_test_metrics
+export display_reporting_testset, gather_test_metrics, combine_test_metrics, save_test_metrics
 
 end
