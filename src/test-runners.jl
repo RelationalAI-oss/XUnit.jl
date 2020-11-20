@@ -11,9 +11,16 @@ end
 function run_testsuite(
     testsuite::TEST_SUITE,
     ::Type{T}=SequentialTestRunner
-)::TEST_SUITE where {T <: TestRunner, TEST_SUITE <: AsyncTestSuite}
-    _run_testsuite(T, testsuite)
-    return _finalize_reports(testsuite)
+)::Bool where {T <: TestRunner, TEST_SUITE <: AsyncTestSuite}
+    # if `_run_testsuite` returns false, then we do not proceed with finalizing the report
+    # as it means that tests haven't ran and will run seprately
+    if _run_testsuite(T, testsuite)
+        _finalize_reports(testsuite)
+        gather_test_metrics(testsuite)
+        save_test_metrics(testsuite)
+        return true
+    end
+    return false
 end
 
 function _run_testsuite(
@@ -22,7 +29,7 @@ function _run_testsuite(
 ) where T <: TestRunner
     scheduled_tests = _schedule_tests(T, testsuite)
     _run_scheduled_tests(T, scheduled_tests)
-    return testsuite
+    return true
 end
 
 struct ScheduledTest
@@ -76,8 +83,11 @@ function _run_scheduled_tests(
             println(" test-case...")
         end
         run_single_testcase(st.parent_testsets, st.target_testcase)
+        save_test_metrics(st.target_testcase)
     end
 end
+
+const METRIC_SAVE_LOCK = ReentrantLock()
 
 function _run_scheduled_tests(
     ::Type{ParallelTestRunner},
@@ -111,6 +121,11 @@ function _run_scheduled_tests(
                 print(read(std_io, String))
             end
             run_single_testcase(st.parent_testsets, st.target_testcase)
+            # writing to metrics collector concurrently might lead to concurrency issues if
+            # it's not thread-safe
+            @lock METRIC_SAVE_LOCK begin
+                save_test_metrics(st.target_testcase)
+            end
         end
     end
 end
@@ -147,6 +162,7 @@ function _run_testsuite(
                     println(" test-case...")
                 end
                 run_single_testcase(parent_testsets, sub_testcase)
+                save_test_metrics(sub_testcase)
             elseif TESTSET_PRINT_ENABLE[]
                 printstyled("Skipping $path test-case...\n"; color=:light_black)
             end
@@ -154,7 +170,7 @@ function _run_testsuite(
     elseif TESTSET_PRINT_ENABLE[]
         printstyled("Skipping $suite_path test-suite...\n"; color=:light_black)
     end
-    return testsuite
+    return true
 end
 
 function run_single_testcase(
@@ -205,7 +221,7 @@ function run_single_testcase(
         for testsuite in parent_testsets
             testsuite.before_each_hook()
         end
-        sub_testcase.test_fn()
+        gather_test_metrics(sub_testcase)
         for testsuite in reverse(parent_testsets)
             testsuite.after_each_hook()
         end
@@ -266,4 +282,40 @@ function _async_with_error_log_expr(expr, message="")
             rethrow()
         end
     end)
+end
+
+function _finalize_reports(testsuite::TEST_SUITE)::TEST_SUITE where TEST_SUITE <: AsyncTestSuite
+    Test.push_testset(testsuite.testset_report)
+    try
+        for sub_testsuite in testsuite.sub_testsuites
+            _finalize_reports(sub_testsuite)
+        end
+
+        for sub_testcase in testsuite.sub_testcases
+            _finalize_reports(sub_testcase)
+        end
+    finally
+        Test.pop_testset()
+    end
+
+    Test.finish(testsuite.testset_report)
+    return testsuite
+end
+
+function _finalize_reports(testcase::TEST_CASE)::TEST_CASE where TEST_CASE <: AsyncTestCase
+    Test.push_testset(testcase.testset_report)
+    try
+        for sub_testsuite in testcase.sub_testsuites
+            _finalize_reports(sub_testsuite)
+        end
+
+        for sub_testcase in testcase.sub_testcases
+            _finalize_reports(sub_testcase)
+        end
+    finally
+        Test.pop_testset()
+    end
+
+    Test.finish(testcase.testset_report)
+    return testcase
 end
