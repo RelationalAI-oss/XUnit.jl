@@ -1,0 +1,14 @@
+name = "XUnit"
+uuid = "3e3c03f2-1a94-11e9-2981-050a4ca824ab"
+authors = ["Mohammad Dashti <mdashti@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+EzXML = "8f5d6c58-4d21-5cfd-889c-e3ad7ee6a615"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+TestReports = "dcd651b4-b50a-5b6b-8f22-87e9f253a252"
+
+[compat]
+EzXML = "1"
+TestReports = "0.4"
