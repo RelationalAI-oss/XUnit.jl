@@ -10,20 +10,22 @@ end
 
 function create_new_measure_instance end
 
-function create_new_measure_instance(::T; explicit::Bool) where T <: TestMetrics
-    create_new_measure_instance(T; explicit=explicit)
-end
-
-function create_new_measure_instance(::Type{T}; explicit::Bool) where T <: TestMetrics
+# This is the main method to overload for your custom `TestMetrics` type
+function create_new_measure_instance(::Type{T}; report_metric::Bool=false) where T <: TestMetrics
     return T()
 end
 
-function create_new_measure_instance(::Type{Nothing}; explicit::Bool)
+# This is a helper function be able to pass a `TestMetrics` object instead of its type
+function create_new_measure_instance(::T; report_metric::Bool=false) where T <: TestMetrics
+    create_new_measure_instance(T; report_metric=report_metric)
+end
+
+function create_new_measure_instance(::Type{Nothing}; report_metric::Bool=false)
     return nothing
 end
 
-function create_new_measure_instance(::Nothing; explicit::Bool)
-    return create_new_measure_instance(Nothing; explicit=explicit)
+function create_new_measure_instance(::Nothing; report_metric::Bool=false)
+    return create_new_measure_instance(Nothing; report_metric=report_metric)
 end
 
 function gather_test_metrics end
@@ -118,7 +120,7 @@ function create_test_metrics(
     if !(parent_testsuite === nothing || parent_testsuite.metrics === nothing || parent_testsuite.metrics isa T)
         error("All metrics in the hierarchy should be the same. Expected $(typeof(parent_testsuite.metrics)) got $T")
     end
-    return create_new_measure_instance(T; explicit=true)
+    return create_new_measure_instance(T; report_metric=true)
 end
 
 function create_test_metrics(
@@ -132,5 +134,5 @@ function create_test_metrics(
 )
     return parent_testsuite === nothing ?
         nothing :
-        create_new_measure_instance(parent_testsuite.metrics; explicit=false)
+        create_new_measure_instance(parent_testsuite.metrics; report_metric=false)
 end
