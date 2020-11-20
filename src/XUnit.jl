@@ -272,13 +272,32 @@ macro testsuite(args...)
     return testsuite_handler(args, __source__)
 end
 
+function _is_block(e)
+    return false
+end
+function _is_block(e::Expr)
+    e.head === :block
+end
+
+"""
+    get_block_source(e)
+
+A utility function for extracting the source information from a block expression
+"""
+function get_block_source(e)
+    if e.head === :block && !isempty(e.args) && e.args[1] isa LineNumberNode
+        return e.args[1]
+    end
+    return nothing
+end
+
 function testsuite_handler(args, source)
     isempty(args) && error("No arguments to @testsuite")
 
     tests = args[end]
 
     # Determine if a single block or for-loop style
-    if !isa(tests, Expr) || tests.head !== :block
+    if !isa(tests, Expr) || !_is_block(tests)
         error("Expected begin/end block or for loop as argument to @testsuite")
     end
 
@@ -294,14 +313,14 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
     is_testcase = suite_type == TestCaseType
     is_testset = suite_type == TestSetType
 
-    tests_is_block_with_location = tests isa Expr && tests.head === :block &&
-                                   !isempty(tests.args) && tests.args[1] isa LineNumberNode
+    tests_block_location = get_block_source(tests)
+    tests_is_block_with_location = tests_block_location !== nothing
 
     # the location information inside `tests.args[1]` (if available) is more accurate
     # The `source` passed to this function is not correct is this macro is called inside
     # another macro. In that case, source will refer to the upper macro's address, not the
     # place that tests are defined
-    source = tests_is_block_with_location ? tests.args[1] : source
+    source = tests_is_block_with_location ? tests_block_location : source
     desc, testsettype, options = XUnit.parse_testset_args(args[1:end-1])
 
     # `option` is a tuple creating expression that represents a key-value option
@@ -327,14 +346,14 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
     # If we're at the top level we'll default to RichReportingTestSet. Otherwise
     # default to the type of the parent testset
     if testsettype === nothing
-        testsettype = :(get_testset_depth() == 0 ? RichReportingTestSet : typeof(get_testset()))
+        testsettype = :(XUnit.get_testset_depth() == 0 ? RichReportingTestSet : typeof(XUnit.get_testset()))
     end
 
     # Generate a block of code that initializes a new testset, adds
     # it to the task local storage, evaluates the test(s), before
     # finally removes the testset and gives it a chance to take
     # action (such as reporting the results)
-    @assert tests.head == :block
+    @assert _is_block(tests)
     ex = quote
         # check that `testsettype` is a subtype of `AbstractTestSet` (otherwise, throw an error)
         XUnit._check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
@@ -359,7 +378,7 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
         finally
             copy!(RNG, oldrng)
             XUnit.pop_testset()
-            if !is_errored && $is_testset && get_testset_depth() == 0
+            if !is_errored && $is_testset && XUnit.get_testset_depth() == 0
                 # if there was no error during the scheduling and it's the topmost `@testset`
                 # (not enclosed in a `@testsuite`) then we want to run the scheduled tests
                 # using the `SequentialTestRunner` to keep the same semantics of `@testset`
@@ -373,7 +392,7 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
     end
     # preserve outer location if possible
     if tests_is_block_with_location
-        ex = Expr(:block, tests.args[1], ex)
+        ex = Expr(:block, tests_block_location, ex)
     end
     return ex
 end
@@ -522,7 +541,7 @@ function testcase_handler(args, source)
     tests = args[end]
 
     # Determine if a single block or for-loop style
-    if !isa(tests, Expr) || tests.head !== :block
+    if !isa(tests, Expr) || !_is_block(tests)
         error("Expected begin/end block or for loop as argument to @testcase")
     end
 
@@ -581,7 +600,7 @@ macro testset(args...)
     tests = args[end]
 
     # Determine if a single block or for-loop style
-    if !isa(tests,Expr) || (tests.head !== :for && tests.head !== :block)
+    if !isa(tests,Expr) || (tests.head !== :for && !_is_block(tests))
         error("Expected begin/end block or for loop as argument to @testset")
     end
 

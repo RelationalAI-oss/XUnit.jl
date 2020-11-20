@@ -19,7 +19,7 @@ after_each_fn_gen(fn_name, extra_param=extra_param_value) = () -> println("     
 topname = "ABC"
 bottomname = "XYZ"
 
-testsuite = @testsuite "Top XParent $topname" metrics=DefaultTestMetrics begin
+testsuite = @testsuite "Top XParent $topname" metrics=SubModule.MyTestMetrics begin
     @testset "XTest 1" before_each=before_each_fn_gen("Child XTest 1") begin
         @testcase "Child XTest 1 $bottomname" begin
             @test 1 == 1

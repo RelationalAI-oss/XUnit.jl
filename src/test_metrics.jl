@@ -115,7 +115,9 @@ end
 function create_test_metrics(
     parent_testsuite::Option{AsyncTestSuiteOrTestCase}, ::Type{T}
 ) where T <: TestMetrics
-    @assert parent_testsuite === nothing || parent_testsuite.metrics === nothing || parent_testsuite.metrics isa T
+    if !(parent_testsuite === nothing || parent_testsuite.metrics === nothing || parent_testsuite.metrics isa T)
+        error("All metrics in the hierarchy should be the same. Expected $(typeof(parent_testsuite.metrics)) got $T")
+    end
     return create_new_measure_instance(T; explicit=true)
 end
 

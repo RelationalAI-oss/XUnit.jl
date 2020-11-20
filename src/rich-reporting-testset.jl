@@ -39,7 +39,7 @@ end
 function Test.finish(rich_ts::RichReportingTestSet)
     # If we are a nested test set, do not print a full summary
     # now - let the parent test set do the printing
-    if get_testset_depth() != 0
+    if Test.get_testset_depth() != 0
         # Attach this test set to the parent test set
         parent_ts = get_testset()
         record(parent_ts, rich_ts)
