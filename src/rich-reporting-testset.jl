@@ -70,7 +70,10 @@ function TestReports.display_reporting_testset(
         finish(ts_default)
     catch TestSetException
         throw_on_error && rethrow()
-        # Otherwise, don't want to error here if a test fails or errors. This is handled elswhere.
+        # Otherwise, don't want to error here if a test fails or errors, as we just want to
+        # display the result and don't care about alerting the caller program about the
+        # test failures. This way, we can make sure that printing the test results always
+        # happens completely, regardless of the tests having and error/failure or not.
     end
     return nothing
 end
