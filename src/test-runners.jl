@@ -398,8 +398,8 @@ function _run_scheduled_tests(
     # put `SharedDistributedCode` module under `Main` on all processes
     @everywhere include_string(
         Main,
-        $(read(joinpath(@__DIR__, "shared_distributed_code.jl"), String)),
-        "shared_distributed_code.jl"
+        $(read(joinpath(@__DIR__, "shared-distributed-code.jl"), String)),
+        "shared-distributed-code.jl"
     )
 
     # make sure to pass the test-state to the worker processes (mostly for test filtering)

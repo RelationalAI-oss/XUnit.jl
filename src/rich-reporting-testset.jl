@@ -99,7 +99,7 @@ function test_println(input...)
     println(test_out_io(), input...)
 end
 
-include("to_xml.jl")
+include("to-xml.jl")
 
 """
     html_report!(

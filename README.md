@@ -206,8 +206,8 @@ Child XTest 3: Error During Test at ./XUnit/test/unittests.jl:79
    [1] fn_throws() at ./XUnit/test/unittests.jl:6
    [2] macro expansion at ./XUnit/test/unittests.jl:79 [inlined]
    [3] (::Main.UnitTests.var"#13#40")() at ./XUnit/src/XUnit.jl:458
-   [4] run_single_testcase(::Array{XUnit.AsyncTestSuite,1}, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}) at ./XUnit/src/test_runners.jl:208
-   [5] macro expansion at ./XUnit/src/test_runners.jl:113 [inlined]
+   [4] run_single_testcase(::Array{XUnit.AsyncTestSuite,1}, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}) at ./XUnit/src/test-runners.jl:208
+   [5] macro expansion at ./XUnit/src/test-runners.jl:113 [inlined]
    [6] (::XUnit.var"#29#threadsfor_fun#17"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})(::Bool) at ./threadingconstructs.jl:81
    [7] (::XUnit.var"#29#threadsfor_fun#17"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})() at ./threadingconstructs.jl:48
 
@@ -224,8 +224,8 @@ Child XTest 3-1: Error During Test at ./XUnit/test/unittests.jl:108
   Stacktrace:
    [1] macro expansion at ./XUnit/test/unittests.jl:116 [inlined]
    [2] (::Main.UnitTests.var"#22#49")() at ./XUnit/src/XUnit.jl:458
-   [3] run_single_testcase(::Array{XUnit.AsyncTestSuite,1}, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}) at ./XUnit/src/test_runners.jl:208
-   [4] macro expansion at ./XUnit/src/test_runners.jl:113 [inlined]
+   [3] run_single_testcase(::Array{XUnit.AsyncTestSuite,1}, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}) at ./XUnit/src/test-runners.jl:208
+   [4] macro expansion at ./XUnit/src/test-runners.jl:113 [inlined]
    [5] (::XUnit.var"#29#threadsfor_fun#17"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})(::Bool) at ./threadingconstructs.jl:81
    [6] (::XUnit.var"#29#threadsfor_fun#17"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})() at ./threadingconstructs.jl:48
 
@@ -237,8 +237,8 @@ Child XTest 3-2: Error During Test at ./XUnit/test/unittests.jl:124
    [1] fn_throws() at ./XUnit/test/unittests.jl:6
    [2] macro expansion at ./XUnit/test/unittests.jl:124 [inlined]
    [3] (::Main.UnitTests.var"#24#51")() at ./XUnit/src/XUnit.jl:458
-   [4] run_single_testcase(::Array{XUnit.AsyncTestSuite,1}, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}) at ./XUnit/src/test_runners.jl:208
-   [5] macro expansion at ./XUnit/src/test_runners.jl:113 [inlined]
+   [4] run_single_testcase(::Array{XUnit.AsyncTestSuite,1}, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}) at ./XUnit/src/test-runners.jl:208
+   [5] macro expansion at ./XUnit/src/test-runners.jl:113 [inlined]
    [6] (::XUnit.var"#29#threadsfor_fun#17"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})(::Bool) at ./threadingconstructs.jl:81
    [7] (::XUnit.var"#29#threadsfor_fun#17"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})() at ./threadingconstructs.jl:48
 
@@ -250,8 +250,8 @@ Child XTest 4-1-1: Error During Test at ./XUnit/test/unittests.jl:145
    [1] fn_throws() at ./XUnit/test/unittests.jl:6
    [2] macro expansion at ./XUnit/test/unittests.jl:145 [inlined]
    [3] (::Main.UnitTests.var"#28#55")() at ./XUnit/src/XUnit.jl:458
-   [4] run_single_testcase(::Array{XUnit.AsyncTestSuite,1}, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}) at ./XUnit/src/test_runners.jl:208
-   [5] macro expansion at ./XUnit/src/test_runners.jl:113 [inlined]
+   [4] run_single_testcase(::Array{XUnit.AsyncTestSuite,1}, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}) at ./XUnit/src/test-runners.jl:208
+   [5] macro expansion at ./XUnit/src/test-runners.jl:113 [inlined]
    [6] (::XUnit.var"#29#threadsfor_fun#17"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})(::Bool) at ./threadingconstructs.jl:81
    [7] (::XUnit.var"#29#threadsfor_fun#17"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})() at ./threadingconstructs.jl:48
 

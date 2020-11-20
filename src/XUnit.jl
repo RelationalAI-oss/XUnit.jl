@@ -107,7 +107,7 @@ function AsyncTestCase(
     return instance
 end
 
-include("test_metrics.jl")
+include("test-metrics.jl")
 
 function clear_test_reports!(testsuite::AsyncTestSuite)
     rich_ts = testsuite.testset_report
@@ -160,8 +160,8 @@ end
 # END AsyncTestSuite and AsyncTestCase
 
 include("rich-reporting-testset.jl")
-include("test_runners.jl")
-include("test_filter.jl")
+include("test-runners.jl")
+include("test-filter.jl")
 
 # BEGIN XUnitState
 
