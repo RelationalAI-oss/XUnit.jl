@@ -305,6 +305,18 @@ function testsuite_handler(args, source)
 end
 
 """
+    get_block_source(e)
+
+A utility function for extracting the source information from a block expression
+"""
+function get_block_source(e)
+    if e.head === :block && !isempty(e.args) && e.args[1] isa LineNumberNode
+        return e.args[1]
+    end
+    return nothing
+end
+
+"""
     testsuite_beginend(args, tests, source, suite_type::SuiteType)
 
 Generate the code for a `@testsuite` with a `begin`/`end` argument
