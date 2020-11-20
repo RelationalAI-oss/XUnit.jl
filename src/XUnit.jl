@@ -317,6 +317,10 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
     is_testcase = suite_type == TestCaseType
     is_testset = suite_type == TestSetType
 
+    tests_block_location = get_block_source(tests)
+    tests_is_block_with_location = tests_block_location !== nothing
+
+    source = tests_is_block_with_location ? tests_block_location : source
     desc, testsettype, options = Test.parse_testset_args(args[1:end-1])
 
     # `option` is a tuple creating expression that represents a key-value option
