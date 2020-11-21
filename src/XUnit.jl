@@ -141,14 +141,14 @@ xml_output(testcase::AsyncTestCase) = xml_output(testcase.testset_report)
 
 function html_report!(
     testsuite::AsyncTestSuite;
-    show_stdout::Bool=TESTSET_PRINT_ENABLE[],
+    show_stdout::Bool=false,
 )
     return html_report!(testsuite.testset_report; show_stdout=show_stdout)
 end
 
 function xml_report!(
     testsuite::AsyncTestSuite;
-    show_stdout::Bool=TESTSET_PRINT_ENABLE[],
+    show_stdout::Bool=false,
 )
     return xml_report!(testsuite.testset_report; show_stdout=show_stdout)
 end

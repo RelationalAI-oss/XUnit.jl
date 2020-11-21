@@ -18,6 +18,9 @@ function run_testsuite(
         _finalize_reports(testsuite)
         gather_test_metrics(testsuite)
         save_test_metrics(testsuite)
+        if TESTSET_PRINT_ENABLE[]
+            display_reporting_testset(testsuite.testset_report)
+        end
         return true
     end
     return false

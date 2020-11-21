@@ -116,13 +116,13 @@ If `show_stdout` is `true`, then it also prints the test output in the standard 
 """
 function html_report!(
     rich_ts::RichReportingTestSet;
-    show_stdout::Bool=TESTSET_PRINT_ENABLE[],
+    show_stdout::Bool=false,
 )
     xml_report!(rich_ts; show_stdout=show_stdout)
 
     run(`junit2html $(rich_ts.xml_output)`)
 
-    if TESTSET_PRINT_ENABLE[]
+    if show_stdout
         println("Test results in HTML format: $(rich_ts.html_output)")
     end
     return rich_ts
@@ -131,7 +131,7 @@ end
 """
     function xml_report!(
         rich_ts::RichReportingTestSet;
-        show_stdout::Bool=TESTSET_PRINT_ENABLE[],
+        show_stdout::Bool=false,
     )
 
 Generates an xUnit/JUnit-style XML file output for the given testset.
@@ -140,7 +140,7 @@ If `show_stdout` is `true`, then it also prints the test output in the standard 
 """
 function xml_report!(
     rich_ts::RichReportingTestSet;
-    show_stdout::Bool=TESTSET_PRINT_ENABLE[],
+    show_stdout::Bool=false,
 )
     if show_stdout
         TestReports.display_reporting_testset(rich_ts)
