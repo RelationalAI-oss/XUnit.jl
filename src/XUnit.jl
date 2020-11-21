@@ -690,7 +690,28 @@ function runtests(filepath::String, args...)
         Core.eval(Main, Expr(:(=), :GLOBAL_TEST_FILENAME, GLOBAL_TEST_FILENAME))
         @passobj 1 workers() GLOBAL_TEST_FILENAME
         @passobj 1 workers() GLOBAL_TEST_MOD
-        @everywhere include_string(Main, Main.GLOBAL_TEST_MOD, Main.GLOBAL_TEST_FILENAME)
+        @everywhere begin
+            tls = task_local_storage()
+            has_saved_source_path = haskey(tls, :SOURCE_PATH)
+            saved_source_path = has_saved_source_path ? tls[:SOURCE_PATH] : nothing
+            try
+                # we are setting the thread-local `:SOURCE_PATH` for Julia's `include`
+                # mechanism to work correctly. Otheriwse, the direct `include`s inside the
+                # test file located at `filepath` won't work.
+                if ispath(Main.GLOBAL_TEST_FILENAME)
+                    tls[:SOURCE_PATH] = Main.GLOBAL_TEST_FILENAME
+                end
+
+                include_string(Main, Main.GLOBAL_TEST_MOD, Main.GLOBAL_TEST_FILENAME)
+
+            finally
+                if has_saved_source_path
+                    tls[:SOURCE_PATH] = saved_source_path
+                else
+                    delete!(tls, :SOURCE_PATH)
+                end
+            end
+        end
     end
 end
 

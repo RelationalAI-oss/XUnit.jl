@@ -152,7 +152,7 @@ testsuite = @testsuite "Top XParent $topname" metrics=SubModule.MyTestMetrics be
             @test 33 == 33
         end
     end
-    include(joinpath(@__DIR__, "subdir1/subdir1-unittest.jl"))
+    include("subdir1/subdir1-unittest.jl")
 end
 
 XUnit.TESTSET_PRINT_ENABLE[] = true
