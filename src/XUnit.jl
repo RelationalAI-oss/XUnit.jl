@@ -9,11 +9,13 @@ using Test: _check_testset, parse_testset_args, push_testset, pop_testset
 using TestReports
 using TestReports: display_reporting_testset
 using Random
+using Base: Filesystem
 using Base.Threads
 using EzXML
 
 const Option{T} = Union{Nothing,T}
 
+abstract type TestRunner end
 abstract type TestMetrics end
 
 # BEGIN AsyncTestSuite and AsyncTestCase
@@ -27,6 +29,11 @@ mutable struct _AsyncTestCase{ASYNC_TEST_SUITE}
     sub_testsuites::Vector{ASYNC_TEST_SUITE}
     sub_testcases::Vector{_AsyncTestCase{ASYNC_TEST_SUITE}}
     metrics::Option{TestMetrics}
+    runner::TestRunner
+    success_handler::Function
+    failure_handler::Function
+    xml_report::Bool
+    html_report::Bool
     modify_lock::ReentrantLock
 end
 
@@ -40,11 +47,20 @@ struct AsyncTestSuite
     sub_testsuites::Vector{AsyncTestSuite}
     sub_testcases::Vector{_AsyncTestCase{AsyncTestSuite}}
     metrics::Option{TestMetrics}
+    runner::TestRunner
+    success_handler::Function
+    failure_handler::Function
+    xml_report::Bool
+    html_report::Bool
     modify_lock::ReentrantLock
 end
 
 const AsyncTestCase = _AsyncTestCase{AsyncTestSuite}
 const AsyncTestSuiteOrTestCase = Union{AsyncTestSuite,AsyncTestCase}
+
+include("rich-reporting-testset.jl")
+include("test-runners.jl")
+include("test-filter.jl")
 
 function AsyncTestSuite(
     testset_report::AbstractTestSet,
@@ -56,6 +72,11 @@ function AsyncTestSuite(
     sub_testcases::Vector{AsyncTestCase} = AsyncTestCase[],
     disabled::Bool = false,
     metrics = nothing,
+    runner::TestRunner = SequentialTestRunner(),
+    success_handler::Function = (testsuite) -> nothing,
+    failure_handler::Function = (testsuite) -> nothing,
+    xml_report::Bool = false,
+    html_report::Bool = false,
 )
     metrics_instance = create_test_metrics(parent_testsuite, metrics)
 
@@ -69,6 +90,11 @@ function AsyncTestSuite(
         sub_testsuites,
         sub_testcases,
         metrics_instance,
+        runner,
+        success_handler,
+        failure_handler,
+        xml_report,
+        html_report,
         ReentrantLock(),
     )
     if parent_testsuite !== nothing
@@ -79,6 +105,20 @@ function AsyncTestSuite(
     return instance
 end
 
+function AsyncTestSuite(testcase::AsyncTestCase)
+    return AsyncTestSuite(
+        testcase.testset_report,
+        testcase.source;
+        disabled = testcase.disabled,
+        metrics = testcase.metrics === nothing ? nothing : typeof(testcase.metrics),
+        runner = testcase.runner,
+        success_handler = testcase.success_handler,
+        failure_handler = testcase.failure_handler,
+        xml_report = testcase.xml_report,
+        html_report = testcase.html_report,
+    )
+end
+
 function AsyncTestCase(
     test_fn::Function,
     testset_report::AbstractTestSet,
@@ -86,6 +126,11 @@ function AsyncTestCase(
     parent_testsuite::Option{AsyncTestSuiteOrTestCase};
     disabled::Bool=false,
     metrics = nothing,
+    runner::TestRunner = SequentialTestRunner(),
+    success_handler::Function = (testsuite) -> nothing,
+    failure_handler::Function = (testsuite) -> nothing,
+    xml_report::Bool = false,
+    html_report::Bool = false,
 )
     metrics_instance = create_test_metrics(parent_testsuite, metrics)
 
@@ -98,6 +143,11 @@ function AsyncTestCase(
         AsyncTestSuite[],
         AsyncTestCase[],
         metrics_instance,
+        runner,
+        success_handler,
+        failure_handler,
+        xml_report,
+        html_report,
         ReentrantLock(),
     )
     if parent_testsuite !== nothing
@@ -129,10 +179,20 @@ const TEST_SUITE_PARAMETER_NAMES = (
     Expr(:quote, :before_each),
     Expr(:quote, :after_each),
     Expr(:quote, :metrics),
+    Expr(:quote, :runner),
+    Expr(:quote, :success_handler),
+    Expr(:quote, :failure_handler),
+    Expr(:quote, :xml_report),
+    Expr(:quote, :html_report),
 )
 
 const TEST_CASE_PARAMETER_NAMES = (
     Expr(:quote, :metrics),
+    Expr(:quote, :runner),
+    Expr(:quote, :success_handler),
+    Expr(:quote, :failure_handler),
+    Expr(:quote, :xml_report),
+    Expr(:quote, :html_report),
 )
 
 html_output(testsuite::AsyncTestSuite) = html_output(testsuite.testset_report)
@@ -140,29 +200,24 @@ html_output(testcase::AsyncTestCase) = html_output(testcase.testset_report)
 xml_output(testsuite::AsyncTestSuite) = xml_output(testsuite.testset_report)
 xml_output(testcase::AsyncTestCase) = xml_output(testcase.testset_report)
 
-function html_report!(
-    testsuite::AsyncTestSuite;
-    show_stdout::Bool=TESTSET_PRINT_ENABLE[],
-)
-    return html_report!(testsuite.testset_report; show_stdout=show_stdout)
+function html_report(testsuite::AsyncTestSuiteOrTestCase)
+    return html_report(testsuite.testset_report)
 end
 
-function xml_report!(
-    testsuite::AsyncTestSuite;
-    show_stdout::Bool=TESTSET_PRINT_ENABLE[],
-)
-    return xml_report!(testsuite.testset_report; show_stdout=show_stdout)
+function xml_report(testsuite::AsyncTestSuiteOrTestCase)
+    return xml_report(testsuite.testset_report)
 end
 
-function TestReports.display_reporting_testset(testsuite::AsyncTestSuite)
-    TestReports.display_reporting_testset(testsuite.testset_report)
+function TestReports.display_reporting_testset(
+    testsuite::AsyncTestSuiteOrTestCase;
+    throw_on_error::Bool = true,
+)
+    TestReports.display_reporting_testset(
+        testsuite.testset_report; throw_on_error=throw_on_error
+    )
 end
 
 # END AsyncTestSuite and AsyncTestCase
-
-include("rich-reporting-testset.jl")
-include("test-runners.jl")
-include("test-filter.jl")
 
 # BEGIN XUnitState
 
@@ -249,7 +304,7 @@ end
 
 """
     @testsuite "suite name" begin ... end
-    @testsuite [before_each=()->...] [after_each=()->...] "suite name" begin ... end
+    @testsuite [before_each=()->...] [after_each=()->...] [metrics=DefaultTestMetrics] [success_handler=(testsuite)->...] [failure_handler=(testsuite)->...] [xml_report=false] [html_report=false] "suite name" begin ... end
 
 Schedules a Test Suite
 
@@ -265,9 +320,14 @@ defined under a `@testsuite` are executed sequentially at scheduling time.
 
 ## Keyword Arguments
 
-`@testsuite` takes two additional parameters:
+`@testsuite` takes seven additional parameters:
   - `before_each`: a function to run before each underlying test-case
   - `after_each`: a function to run after each underlying test-case
+  - `metrics`: a custom `TestMetrics` type
+  - `success_handler`: a function to run after a successful handling of all tests. This function accepts the test-suite as an argument. This argument only works for the top-most `@testsuite`.
+  - `failure_handler`: a function to run after a failed handling of all tests. This function accepts the test-suite as an argument. This argument only works for the top-most `@testsuite`.
+  - `xml_report`: whether to produce the XML output file at the end. This argument only works for the top-most `@testsuite`
+  - `html_report`: whether to produce the HTML output file at the end. This argument only works for the top-most `@testsuite`
 """
 macro testsuite(args...)
     return testsuite_handler(args, __source__)
@@ -312,7 +372,6 @@ Generate the code for a `@testsuite` with a `begin`/`end` argument
 """
 function testsuite_beginend(args, tests, source, suite_type::SuiteType)
     is_testcase = suite_type == TestCaseType
-    is_testset = suite_type == TestSetType
 
     tests_block_location = get_block_source(tests)
     tests_is_block_with_location = tests_block_location !== nothing
@@ -366,29 +425,27 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
         # by wrapping the body in a function
         local RNG = Random.default_rng()
         local oldrng = copy(RNG)
-        local is_errored = false
+        local ret = nothing
         try
             # RNG is re-seeded with its own seed to ease reproduce a failed test
             Random.seed!(RNG.seed)
             ret = let
                 $(checked_testsuite_expr(desc, tests, source, hook_fn_options; is_testcase = is_testcase))
             end
-        catch
-            is_errored = true
-            rethrow()
         finally
             copy!(RNG, oldrng)
             XUnit.pop_testset()
-            if !is_errored && $is_testset && XUnit.get_testset_depth() == 0
-                # if there was no error during the scheduling and it's the topmost `@testset`
-                # (not enclosed in a `@testsuite`) then we want to run the scheduled tests
-                # using the `SequentialTestRunner` to keep the same semantics of `@testset`
-                # in `Base.Test`
-                if run_testsuite(SequentialTestRunner, ret) && XUnit.TESTSET_PRINT_ENABLE[]
-                    TestReports.display_reporting_testset(ts)
-                end
-            end
         end
+
+        if ret !== nothing && XUnit.get_testset_depth() == 0
+            # if there was no error during the scheduling and it's the topmost `@testset`,
+            # `@testsuite` or `@testcase`, then we want to run the scheduled tests.
+            # If the `runner` keyword argument is used, that runner type is going to run
+            # the tests. Otherwise, `SequentialTestRunner` is used to keep the same
+            # semantics of `@testset` in `Base.Test`
+            run_testsuite(ret)
+        end
+
         ret
     end
     # preserve outer location if possible
@@ -396,6 +453,27 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
         ex = Expr(:block, tests_block_location, ex)
     end
     return ex
+end
+
+function run_testcase_inplace(testcase_obj)
+    testcase_obj.disabled && return
+
+    ts = testcase_obj.testset_report
+
+    try
+        # a test-case that is under another test-case is treated
+        # like a testset and runs immediately
+        # Note: `before_each` and `after_each` hooks are already
+        # ran for the top-most test-case and won't run again
+        XUnit.gather_test_metrics(testcase_obj; run=true)
+    catch err
+        err isa InterruptException && rethrow()
+        # something in the test block threw an error. Count that as an
+        # error in this test set
+        XUnit.record(ts, XUnit.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), testcase_obj.source))
+    end
+
+    return testcase_obj
 end
 
 # This function is the common function for handling the body of all `@testsuite`, `@testset`,
@@ -485,16 +563,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                                 push!(rs.test_suites_stack, testcase_obj)
 
                                 try
-                                    # a test-case that is under another test-case is treated
-                                    # like a testset and runs immediately
-                                    # Note: `before_each` and `after_each` hooks are already
-                                    # ran for the top-most test-case and won't run again
-                                    XUnit.gather_test_metrics(testcase_obj)
-                                catch err
-                                    err isa InterruptException && rethrow()
-                                    # something in the test block threw an error. Count that as an
-                                    # error in this test set
-                                    XUnit.record(ts, XUnit.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), testcase_obj.source))
+                                    run_testcase_inplace(testcase_obj)
                                 finally
                                     pop!(rs.test_suites_stack)
                                 end
@@ -525,12 +594,22 @@ end
 
 """
     @testcase "test-case name" begin ... end
+    @testcase [before_each=()->...] [after_each=()->...] [metrics=DefaultTestMetrics] [success_handler=(testcase)->...] [failure_handler=(testcase)->...] [xml_report=false] [html_report=false] "test-case" begin ... end
 
 Defines a self-contained test-case.
 
 Test-cases are gathered at scheduling time and will get executed using a test-runner.
 As a test-runner can run tests in any order (and even on multiple threads/processes), it's
 strongly advised that test-cases do not depend on each other.
+
+## Keyword Arguments
+
+`@testsuite` takes four additional parameters:
+  - `metrics`: a custom `TestMetrics` type
+  - `success_handler`: a function to run after a successful handling of all tests. This function accepts the test-suite as an argument. This argument only works for the top-most `@testcase`.
+  - `failure_handler`: a function to run after a failed handling of all tests. This function accepts the test-suite as an argument. This argument only works for the top-most `@testcase`.
+  - `xml_report`: whether to produce the XML output file at the end. This argument only works for the top-most `@testcase`
+  - `html_report`: whether to produce the HTML output file at the end. This argument only works for the top-most `@testcase`
 """
 macro testcase(args...)
     return testcase_handler(args, __source__)
@@ -753,7 +832,7 @@ function runtests(depth::Int, args...)
     runtests(testfile, depth, args...)
 end
 
-export RichReportingTestSet, html_output, html_report!, xml_output, xml_report!
+export RichReportingTestSet, html_output, html_report, xml_output, xml_report
 export clear_test_reports!, test_out_io, test_err_io, test_print, test_println
 
 export @testset, @test_broken

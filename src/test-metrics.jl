@@ -30,10 +30,10 @@ end
 
 function gather_test_metrics end
 
-function gather_test_metrics(t::AsyncTestSuite)
+function gather_test_metrics(t::AsyncTestSuite; run::Bool=true)
     if !t.disabled
         for sub_testsuite in t.sub_testsuites
-            gather_test_metrics(sub_testsuite)
+            gather_test_metrics(sub_testsuite; run=run)
             combine_test_metrics(t, sub_testsuite)
         end
 
@@ -43,20 +43,24 @@ function gather_test_metrics(t::AsyncTestSuite)
     end
 end
 
-function gather_test_metrics(t::AsyncTestCase)
-    !t.disabled && gather_test_metrics(t.test_fn, t)
+function gather_test_metrics(t::AsyncTestCase; run::Bool=true)
+    !t.disabled && gather_test_metrics(t.test_fn, t; run=run)
 end
 
-function gather_test_metrics(fn::Function, t::AsyncTestCase)
-    return gather_test_metrics(fn, t.testset_report, t.metrics)
+function gather_test_metrics(fn::Function, t::AsyncTestCase; run::Bool=true)
+    return gather_test_metrics(fn, t.testset_report, t.metrics; run=run)
 end
 
-function gather_test_metrics(fn::Function, ::AbstractTestSet, ::Nothing)
+function gather_test_metrics(fn::Function, ::AbstractTestSet, ::Nothing; run::Bool=true)
+    !run && return nothing
     # nothing to measure by default
     return fn()
 end
 
-function gather_test_metrics(fn::Function, ts::AbstractTestSet, m::DefaultTestMetrics)
+function gather_test_metrics(
+    fn::Function, ts::AbstractTestSet, m::DefaultTestMetrics; run::Bool=true
+)
+    !run && return nothing
     val, t, bytes, gctime, memallocs = @timed fn()
     m.time = t
     m.bytes = bytes

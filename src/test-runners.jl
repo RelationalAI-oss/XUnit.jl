@@ -1,32 +1,79 @@
-abstract type TestRunner end
 struct SequentialTestRunner <: TestRunner end
 struct ShuffledTestRunner <: TestRunner end
 struct ParallelTestRunner <: TestRunner end
 struct DistributedTestRunner <: TestRunner end
 
 # Runs a Scheduled Test-Suite
-function run_testsuite(::Type{T}, testsuite::AsyncTestSuite) where T <: TestRunner
-    return run_testsuite(testsuite, T)
+function run_testsuite(
+    ::Type{T},
+    testsuite::AsyncTestSuiteOrTestCase;
+    throw_on_error::Bool=true,
+    show_stdout::Bool=TESTSET_PRINT_ENABLE[],
+) where T <: TestRunner
+    return run_testsuite(
+        testsuite, T;
+        throw_on_error=throw_on_error, show_stdout=show_stdout
+    )
 end
 
 function run_testsuite(
-    testsuite::TEST_SUITE,
-    ::Type{T}=SequentialTestRunner
-)::Bool where {T <: TestRunner, TEST_SUITE <: AsyncTestSuite}
+    testsuite::AsyncTestSuiteOrTestCase,
+    ::Type{T}=typeof(testsuite.runner);
+    throw_on_error::Bool=true,
+    show_stdout::Bool=TESTSET_PRINT_ENABLE[],
+)::Bool where {T <: TestRunner}
     # if `_run_testsuite` returns false, then we do not proceed with finalizing the report
     # as it means that tests haven't ran and will run seprately
     if _run_testsuite(T, testsuite)
         _finalize_reports(testsuite)
-        gather_test_metrics(testsuite)
+        gather_test_metrics(testsuite; run=false)
         save_test_metrics(testsuite)
+        if show_stdout
+            display_reporting_testset(testsuite, throw_on_error=false)
+        end
+
+        testsuite.xml_report && xml_report(testsuite)
+        testsuite.html_report && html_report(testsuite)
+
+        if throw_on_error
+            _swallow_all_outputs() do # test results are already printed. Let's avoid printing the errors twice.
+                prev_TESTSET_PRINT_ENABLE = TESTSET_PRINT_ENABLE[]
+                TESTSET_PRINT_ENABLE[] = false
+                try
+                    # throw an exception is any test failed or errored
+                    display_reporting_testset(testsuite; throw_on_error=true)
+                catch
+                    testsuite.failure_handler(testsuite)
+                    rethrow()
+                finally
+                    TESTSET_PRINT_ENABLE[] = prev_TESTSET_PRINT_ENABLE
+                end
+            end
+        end
+
+        testsuite.success_handler(testsuite)
+
         return true
     end
     return false
 end
 
+# captures all standard outputs of the given function
+function _swallow_all_outputs(dofunc::Function)
+    Filesystem.mktemp() do out_path, out
+        Filesystem.mktemp() do err_path, err
+            redirect_stdout(out) do
+                redirect_stderr(err) do
+                    dofunc()
+                end
+            end
+        end
+    end
+end
+
 function _run_testsuite(
     ::Type{T},
-    testsuite::AsyncTestSuite,
+    testsuite::AsyncTestSuiteOrTestCase,
 ) where T <: TestRunner
     scheduled_tests = _schedule_tests(T, testsuite)
     _run_scheduled_tests(T, scheduled_tests)
@@ -94,6 +141,22 @@ function _schedule_tests(
             push!(testcases_acc, st)
         end
     end
+    return testcases_acc
+end
+
+function _schedule_tests(
+    ::Type{T},
+    testcase::AsyncTestCase,
+    testcases_acc::Vector{ScheduledTest}=ScheduledTest[],
+    parent_testsets::Vector{AsyncTestSuite}=AsyncTestSuite[]
+) where T <: TestRunner
+    parent_testsets = copy(parent_testsets)
+
+    if !testcase.disabled
+        st = ScheduledTest(parent_testsets, testcase)
+        push!(testcases_acc, st)
+    end
+
     return testcases_acc
 end
 
@@ -258,7 +321,7 @@ function run_single_testcase(
         for testsuite in parent_testsets
             testsuite.before_each_hook()
         end
-        gather_test_metrics(sub_testcase)
+        gather_test_metrics(sub_testcase; run=true)
         for testsuite in reverse(parent_testsets)
             testsuite.after_each_hook()
         end

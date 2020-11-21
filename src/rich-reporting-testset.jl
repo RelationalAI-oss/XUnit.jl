@@ -57,7 +57,7 @@ end
 
 function TestReports.display_reporting_testset(
     rich_ts::RichReportingTestSet;
-    throw_on_error::Bool = false,
+    throw_on_error::Bool = true,
 )
     ts = rich_ts.reporting_test_set[]
     # Create top level default testset to hold all results
@@ -105,47 +105,28 @@ end
 include("to-xml.jl")
 
 """
-    html_report!(
-        rich_ts::RichReportingTestSet;
-        show_stdout::Bool=TESTSET_PRINT_ENABLE[],
-    )
+    html_report(rich_ts::RichReportingTestSet)
 
 Generates an HTML file output for the given testset.
 
 If `show_stdout` is `true`, then it also prints the test output in the standard output.
 """
-function html_report!(
-    rich_ts::RichReportingTestSet;
-    show_stdout::Bool=TESTSET_PRINT_ENABLE[],
-)
-    xml_report!(rich_ts; show_stdout=show_stdout)
+function html_report(rich_ts::RichReportingTestSet)
+    xml_report(rich_ts)
 
     run(`junit2html $(rich_ts.xml_output)`)
 
-    if TESTSET_PRINT_ENABLE[]
-        println("Test results in HTML format: $(rich_ts.html_output)")
-    end
+    println("Test results in HTML format: $(rich_ts.html_output)")
+
     return rich_ts
 end
 
 """
-    function xml_report!(
-        rich_ts::RichReportingTestSet;
-        show_stdout::Bool=TESTSET_PRINT_ENABLE[],
-    )
+    function xml_report(rich_ts::RichReportingTestSet)
 
 Generates an xUnit/JUnit-style XML file output for the given testset.
-
-If `show_stdout` is `true`, then it also prints the test output in the standard output.
 """
-function xml_report!(
-    rich_ts::RichReportingTestSet;
-    show_stdout::Bool=TESTSET_PRINT_ENABLE[],
-)
-    if show_stdout
-        TestReports.display_reporting_testset(rich_ts)
-    end
-
+function xml_report(rich_ts::RichReportingTestSet)
     # We are the top level, lets do this
     flatten_results!(rich_ts)
 

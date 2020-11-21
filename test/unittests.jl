@@ -16,10 +16,13 @@ extra_param_value = "extra_p"
 before_each_fn_gen(fn_name, extra_param=extra_param_value) = () -> println("         >>>> before_each -> $fn_name, $extra_param, $global_param")
 after_each_fn_gen(fn_name, extra_param=extra_param_value) = () -> println("         >>>> after_each -> $fn_name, $extra_param, $global_param")
 
+XUnit.TESTSET_PRINT_ENABLE[] = true
+println("Running tests with $(Threads.nthreads()) threads")
+
 topname = "ABC"
 bottomname = "XYZ"
 
-testsuite = @testsuite "Top XParent $topname" metrics=SubModule.MyTestMetrics begin
+testsuite = @testsuite "Top XParent $topname" metrics=SubModule.MyTestMetrics runner=DistributedTestRunner() html_report=true success_handler=(testsuite) -> run(`open ./$(html_output(testsuite))`) failure_handler=(testsuite) -> run(`open ./$(html_output(testsuite))`) begin
     @testset "XTest 1" before_each=before_each_fn_gen("Child XTest 1") begin
         @testcase "Child XTest 1 $bottomname" begin
             @test 1 == 1
@@ -155,12 +158,6 @@ testsuite = @testsuite "Top XParent $topname" metrics=SubModule.MyTestMetrics be
     include("subdir1/subdir1-unittest.jl")
 end
 
-XUnit.TESTSET_PRINT_ENABLE[] = true
-println("Running tests with $(Threads.nthreads()) threads")
-# if run_testsuite(SequentialTestRunner, testsuite)
-# if run_testsuite(ShuffledTestRunner, testsuite)
-# if run_testsuite(ParallelTestRunner, testsuite)
-if run_testsuite(DistributedTestRunner, testsuite)
-    html_report!(testsuite; show_stdout=XUnit.TESTSET_PRINT_ENABLE[])
-    run(`open ./$(html_output(testsuite))`)
+nothing
+
 end
