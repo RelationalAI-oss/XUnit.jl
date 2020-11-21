@@ -22,7 +22,7 @@ println("Running tests with $(Threads.nthreads()) threads")
 topname = "ABC"
 bottomname = "XYZ"
 
-testsuite = @testsuite "Top XParent $topname" metrics=SubModule.MyTestMetrics runner=DistributedTestRunner() html_report=true success_handler=(testsuite) -> run(`open ./$(html_output(testsuite))`) failure_handler=(testsuite) -> run(`open ./$(html_output(testsuite))`) begin
+@testsuite "Top XParent $topname" metrics=SubModule.MyTestMetrics runner=DistributedTestRunner() html_report=true success_handler=(testsuite) -> run(`open ./$(html_output(testsuite))`) failure_handler=(testsuite) -> run(`open ./$(html_output(testsuite))`) begin
     @testset "XTest 1" before_each=before_each_fn_gen("Child XTest 1") begin
         @testcase "Child XTest 1 $bottomname" begin
             @test 1 == 1
@@ -159,5 +159,3 @@ testsuite = @testsuite "Top XParent $topname" metrics=SubModule.MyTestMetrics ru
 end
 
 nothing
-
-end
