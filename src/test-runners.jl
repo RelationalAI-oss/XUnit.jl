@@ -629,25 +629,22 @@ function DistributedAsyncTestMessage(t::AsyncTestSuiteOrTestCase)
     )
 end
 
-function AsyncTestCase(parent, msg::DistributedAsyncTestMessage)
+function AsyncTestCase(parent::AsyncTestSuiteOrTestCase, msg::DistributedAsyncTestMessage)
     t = AsyncTestCase(
-        msg.testset_report,
-        parent,
         () -> nothing,
+        msg.testset_report,
         msg.source,
-        msg.disabled,
-        AsyncTestSuite[],
-        AsyncTestCase[],
-        msg.metrics,
-        ReentrantLock(),
+        parent;
+        disabled=msg.disabled,
+        metrics=msg.metrics,
     )
 
     for sub_testsuite in msg.sub_testsuites
-        push!(parent.sub_testsuites, AsyncTestSuite(t, sub_testsuite))
+        AsyncTestSuite(t, sub_testsuite) # the returned test-suite is already registered with its parent
     end
 
     for sub_testcase in msg.sub_testcases
-        push!(parent.sub_testcases, AsyncTestCase(t, sub_testcase))
+        AsyncTestCase(t, sub_testcase) # the returned test-suite is already registered with its parent
     end
 
     return t
@@ -656,23 +653,18 @@ end
 function AsyncTestSuite(parent::AsyncTestSuiteOrTestCase, msg::DistributedAsyncTestMessage)
     t = AsyncTestSuite(
         msg.testset_report,
-        parent,
-        () -> nothing,
-        () -> nothing,
         msg.source,
-        msg.disabled,
-        AsyncTestSuite[],
-        AsyncTestCase[],
-        msg.metrics,
-        ReentrantLock(),
+        parent;
+        disabled=msg.disabled,
+        metrics=msg.metrics,
     )
 
     for sub_testsuite in msg.sub_testsuites
-        push!(parent.sub_testsuites, AsyncTestSuite(t, sub_testsuite))
+        AsyncTestSuite(t, sub_testsuite) # the returned test-suite is already registered with its parent
     end
 
     for sub_testcase in msg.sub_testcases
-        push!(parent.sub_testcases, AsyncTestCase(t, sub_testcase))
+        AsyncTestCase(t, sub_testcase) # the returned test-suite is already registered with its parent
     end
 
     return t
