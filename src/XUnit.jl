@@ -462,7 +462,7 @@ function run_testcase_inplace(testcase_obj)
         # like a testset and runs immediately
         # Note: `before_each` and `after_each` hooks are already
         # ran for the top-most test-case and won't run again
-        XUnit.gather_test_metrics(testcase_obj; run=true)
+        testcase_obj.test_fn()
     catch err
         err isa InterruptException && rethrow()
         # something in the test block threw an error. Count that as an
@@ -837,6 +837,6 @@ export AbstractTestSet, DefaultTestSet, record, finish
 export TestRunner
 export SequentialTestRunner, ShuffledTestRunner, ParallelTestRunner
 export TestMetrics
-export display_reporting_testset, gather_test_metrics, combine_test_metrics, save_test_metrics
+export display_reporting_testset
 
 end

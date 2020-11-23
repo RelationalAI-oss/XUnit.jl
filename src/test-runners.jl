@@ -25,8 +25,6 @@ function run_testsuite(
     # as it means that tests haven't ran and will run seprately
     if _run_testsuite(T, testsuite)
         _finalize_reports(testsuite)
-        gather_test_metrics(testsuite; run=false)
-        save_test_metrics(testsuite)
         if show_stdout
             display_reporting_testset(testsuite, throw_on_error=false)
         end
@@ -146,7 +144,6 @@ function _run_scheduled_tests(
             println(" test-case...")
         end
         run_single_testcase(st.parent_testsets, st.target_testcase)
-        save_test_metrics(st.target_testcase)
     end
 end
 
@@ -184,11 +181,6 @@ function _run_scheduled_tests(
                 print(read(std_io, String))
             end
             run_single_testcase(st.parent_testsets, st.target_testcase)
-            # writing to metrics collector concurrently might lead to concurrency issues if
-            # it's not thread-safe
-            @lock METRIC_SAVE_LOCK begin
-                save_test_metrics(st.target_testcase)
-            end
         end
     end
 end
@@ -225,7 +217,6 @@ function _run_testsuite(
                     println(" test-case...")
                 end
                 run_single_testcase(parent_testsets, sub_testcase)
-                save_test_metrics(sub_testcase)
             elseif TESTSET_PRINT_ENABLE[]
                 printstyled("Skipping $path test-case...\n"; color=:light_black)
             end
@@ -284,7 +275,7 @@ function run_single_testcase(
         for testsuite in parent_testsets
             testsuite.before_each_hook()
         end
-        gather_test_metrics(sub_testcase; run=true)
+        sub_testcase.test_fn()
         for testsuite in reverse(parent_testsets)
             testsuite.after_each_hook()
         end
