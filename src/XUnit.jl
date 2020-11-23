@@ -1,19 +1,25 @@
 module XUnit
 
+using Base: @lock, ReentrantLock
 import Test
 using Test: AbstractTestSet, Result, Fail, Broken, Pass, Error
 using Test: TESTSET_PRINT_ENABLE, get_testset_depth, get_testset
+using Test: _check_testset, parse_testset_args, push_testset, pop_testset
 using TestReports
 using TestReports: display_reporting_testset
 using Random
+using Base: Filesystem
 using Base.Threads
 using EzXML
 
 const Option{T} = Union{Nothing,T}
 
+abstract type TestRunner end
+abstract type TestMetrics end
+
 # BEGIN AsyncTestSuite and AsyncTestCase
 
-struct _AsyncTestCase{ASYNC_TEST_SUITE}
+mutable struct _AsyncTestCase{ASYNC_TEST_SUITE}
     testset_report::AbstractTestSet
     parent_testsuite::Option{Union{_AsyncTestCase{ASYNC_TEST_SUITE},ASYNC_TEST_SUITE}}
     test_fn::Function
@@ -21,6 +27,12 @@ struct _AsyncTestCase{ASYNC_TEST_SUITE}
     disabled::Bool
     sub_testsuites::Vector{ASYNC_TEST_SUITE}
     sub_testcases::Vector{_AsyncTestCase{ASYNC_TEST_SUITE}}
+    metrics::Option{TestMetrics}
+    runner::TestRunner
+    success_handler::Function
+    failure_handler::Function
+    xml_report::Bool
+    html_report::Bool
     modify_lock::ReentrantLock
 end
 
@@ -33,22 +45,40 @@ struct AsyncTestSuite
     disabled::Bool
     sub_testsuites::Vector{AsyncTestSuite}
     sub_testcases::Vector{_AsyncTestCase{AsyncTestSuite}}
+    metrics::Option{TestMetrics}
+    runner::TestRunner
+    success_handler::Function
+    failure_handler::Function
+    xml_report::Bool
+    html_report::Bool
     modify_lock::ReentrantLock
 end
 
 const AsyncTestCase = _AsyncTestCase{AsyncTestSuite}
 const AsyncTestSuiteOrTestCase = Union{AsyncTestSuite,AsyncTestCase}
 
+include("rich-reporting-testset.jl")
+include("test-runners.jl")
+include("test-filter.jl")
+
 function AsyncTestSuite(
     testset_report::AbstractTestSet,
     source::LineNumberNode,
     parent_testsuite::Option{AsyncTestSuiteOrTestCase}=nothing;
     before_each::Function = () -> nothing,
+    after_each::Function = () -> nothing,
     sub_testsuites::Vector{AsyncTestSuite} = AsyncTestSuite[],
     sub_testcases::Vector{AsyncTestCase} = AsyncTestCase[],
-    after_each::Function = () -> nothing,
     disabled::Bool = false,
+    metrics = nothing,
+    runner::TestRunner = SequentialTestRunner(),
+    success_handler::Function = (testsuite) -> nothing,
+    failure_handler::Function = (testsuite) -> nothing,
+    xml_report::Bool = false,
+    html_report::Bool = false,
 )
+    metrics_instance = nothing
+
     instance = AsyncTestSuite(
         testset_report,
         parent_testsuite,
@@ -58,6 +88,12 @@ function AsyncTestSuite(
         disabled,
         sub_testsuites,
         sub_testcases,
+        metrics_instance,
+        runner,
+        success_handler,
+        failure_handler,
+        xml_report,
+        html_report,
         ReentrantLock(),
     )
     if parent_testsuite !== nothing
@@ -68,13 +104,35 @@ function AsyncTestSuite(
     return instance
 end
 
+function AsyncTestSuite(testcase::AsyncTestCase)
+    return AsyncTestSuite(
+        testcase.testset_report,
+        testcase.source;
+        disabled = testcase.disabled,
+        metrics = testcase.metrics === nothing ? nothing : typeof(testcase.metrics),
+        runner = testcase.runner,
+        success_handler = testcase.success_handler,
+        failure_handler = testcase.failure_handler,
+        xml_report = testcase.xml_report,
+        html_report = testcase.html_report,
+    )
+end
+
 function AsyncTestCase(
     test_fn::Function,
     testset_report::AbstractTestSet,
     source::LineNumberNode,
     parent_testsuite::Option{AsyncTestSuiteOrTestCase};
     disabled::Bool=false,
+    metrics = nothing,
+    runner::TestRunner = SequentialTestRunner(),
+    success_handler::Function = (testsuite) -> nothing,
+    failure_handler::Function = (testsuite) -> nothing,
+    xml_report::Bool = false,
+    html_report::Bool = false,
 )
+    metrics_instance = nothing
+
     instance = AsyncTestCase(
         testset_report,
         parent_testsuite,
@@ -83,6 +141,12 @@ function AsyncTestCase(
         disabled,
         AsyncTestSuite[],
         AsyncTestCase[],
+        metrics_instance,
+        runner,
+        success_handler,
+        failure_handler,
+        xml_report,
+        html_report,
         ReentrantLock(),
     )
     if parent_testsuite !== nothing
@@ -108,45 +172,24 @@ function clear_test_reports!(testcase::AsyncTestCase)
     rich_ts.reporting_test_set[] = ReportingTestSet(rich_ts.description)
 end
 
-function _finalize_reports(testsuite::TEST_SUITE)::TEST_SUITE where TEST_SUITE <: AsyncTestSuite
-    Test.push_testset(testsuite.testset_report)
-    try
-        for sub_testsuite in testsuite.sub_testsuites
-            _finalize_reports(sub_testsuite)
-        end
-
-        for sub_testcase in testsuite.sub_testcases
-            _finalize_reports(sub_testcase)
-        end
-    finally
-        Test.pop_testset()
-    end
-
-    Test.finish(testsuite.testset_report)
-    return testsuite
-end
-
-function _finalize_reports(testcase::TEST_CASE)::TEST_CASE where TEST_CASE <: AsyncTestCase
-    Test.push_testset(testcase.testset_report)
-    try
-        for sub_testsuite in testcase.sub_testsuites
-            _finalize_reports(sub_testsuite)
-        end
-
-        for sub_testcase in testcase.sub_testcases
-            _finalize_reports(sub_testcase)
-        end
-    finally
-        Test.pop_testset()
-    end
-
-    Test.finish(testcase.testset_report)
-    return testcase
-end
-
-const TEST_SUITE_HOOK_FUNCTION_PARAMETER_NAMES = (
+const TEST_SUITE_PARAMETER_NAMES = (
     Expr(:quote, :before_each),
     Expr(:quote, :after_each),
+    Expr(:quote, :metrics),
+    Expr(:quote, :runner),
+    Expr(:quote, :success_handler),
+    Expr(:quote, :failure_handler),
+    Expr(:quote, :xml_report),
+    Expr(:quote, :html_report),
+)
+
+const TEST_CASE_PARAMETER_NAMES = (
+    Expr(:quote, :metrics),
+    Expr(:quote, :runner),
+    Expr(:quote, :success_handler),
+    Expr(:quote, :failure_handler),
+    Expr(:quote, :xml_report),
+    Expr(:quote, :html_report),
 )
 
 html_output(testsuite::AsyncTestSuite) = html_output(testsuite.testset_report)
@@ -154,29 +197,24 @@ html_output(testcase::AsyncTestCase) = html_output(testcase.testset_report)
 xml_output(testsuite::AsyncTestSuite) = xml_output(testsuite.testset_report)
 xml_output(testcase::AsyncTestCase) = xml_output(testcase.testset_report)
 
-function html_report!(
-    testsuite::AsyncTestSuite;
-    show_stdout::Bool=TESTSET_PRINT_ENABLE[],
-)
-    return html_report!(testsuite.testset_report; show_stdout=show_stdout)
+function html_report(testsuite::AsyncTestSuiteOrTestCase)
+    return html_report(testsuite.testset_report)
 end
 
-function xml_report!(
-    testsuite::AsyncTestSuite;
-    show_stdout::Bool=TESTSET_PRINT_ENABLE[],
-)
-    return xml_report!(testsuite.testset_report; show_stdout=show_stdout)
+function xml_report(testsuite::AsyncTestSuiteOrTestCase)
+    return xml_report(testsuite.testset_report)
 end
 
-function TestReports.display_reporting_testset(testsuite::AsyncTestSuite)
-    TestReports.display_reporting_testset(testsuite.testset_report)
+function TestReports.display_reporting_testset(
+    testsuite::AsyncTestSuiteOrTestCase;
+    throw_on_error::Bool = true,
+)
+    TestReports.display_reporting_testset(
+        testsuite.testset_report; throw_on_error=throw_on_error
+    )
 end
 
 # END AsyncTestSuite and AsyncTestCase
-
-include("test_runners.jl")
-include("rich-reporting-testset.jl")
-include("test_filter.jl")
 
 # BEGIN XUnitState
 
@@ -263,7 +301,7 @@ end
 
 """
     @testsuite "suite name" begin ... end
-    @testsuite [before_each=()->...] [after_each=()->...] "suite name" begin ... end
+    @testsuite [before_each=()->...] [after_each=()->...] [metrics=DefaultTestMetrics] [success_handler=(testsuite)->...] [failure_handler=(testsuite)->...] [xml_report=false] [html_report=false] "suite name" begin ... end
 
 Schedules a Test Suite
 
@@ -279,21 +317,24 @@ defined under a `@testsuite` are executed sequentially at scheduling time.
 
 ## Keyword Arguments
 
-`@testsuite` takes two additional parameters:
+`@testsuite` takes seven additional parameters:
   - `before_each`: a function to run before each underlying test-case
   - `after_each`: a function to run after each underlying test-case
+  - `metrics`: a custom `TestMetrics` type
+  - `success_handler`: a function to run after a successful handling of all tests. This function accepts the test-suite as an argument. This argument only works for the top-most `@testsuite`.
+  - `failure_handler`: a function to run after a failed handling of all tests. This function accepts the test-suite as an argument. This argument only works for the top-most `@testsuite`.
+  - `xml_report`: whether to produce the XML output file at the end. This argument only works for the top-most `@testsuite`
+  - `html_report`: whether to produce the HTML output file at the end. This argument only works for the top-most `@testsuite`
 """
 macro testsuite(args...)
-    isempty(args) && error("No arguments to @testsuite")
+    return testsuite_handler(args, __source__)
+end
 
-    tests = args[end]
-
-    # Determine if a single block or for-loop style
-    if !isa(tests, Expr) || tests.head !== :block
-        error("Expected begin/end block or for loop as argument to @testsuite")
-    end
-
-    return testsuite_beginend(args, tests, __source__, TestSuiteType)
+function _is_block(e)
+    return false
+end
+function _is_block(e::Expr)
+    e.head === :block
 end
 
 """
@@ -308,6 +349,19 @@ function get_block_source(e)
     return nothing
 end
 
+function testsuite_handler(args, source)
+    isempty(args) && error("No arguments to @testsuite")
+
+    tests = args[end]
+
+    # Determine if a single block or for-loop style
+    if !isa(tests, Expr) || !_is_block(tests)
+        error("Expected begin/end block or for loop as argument to @testsuite")
+    end
+
+    return testsuite_beginend(args, tests, source, TestSuiteType)
+end
+
 """
     testsuite_beginend(args, tests, source, suite_type::SuiteType)
 
@@ -315,19 +369,25 @@ Generate the code for a `@testsuite` with a `begin`/`end` argument
 """
 function testsuite_beginend(args, tests, source, suite_type::SuiteType)
     is_testcase = suite_type == TestCaseType
-    is_testset = suite_type == TestSetType
 
     tests_block_location = get_block_source(tests)
     tests_is_block_with_location = tests_block_location !== nothing
 
+    # the location information inside `tests.args[1]` (if available) is more accurate
+    # The `source` passed to this function is not correct is this macro is called inside
+    # another macro. In that case, source will refer to the upper macro's address, not the
+    # place that tests are defined
     source = tests_is_block_with_location ? tests_block_location : source
-    desc, testsettype, options = Test.parse_testset_args(args[1:end-1])
+    desc, testsettype, options = XUnit.parse_testset_args(args[1:end-1])
 
     # `option` is a tuple creating expression that represents a key-value option
     function filter_hooks_fn(option)
         option.head == :call &&
         option.args[1] == :(=>) &&
-        (option.args[2] in TEST_SUITE_HOOK_FUNCTION_PARAMETER_NAMES && !is_testcase)
+        (
+            (option.args[2] in TEST_CASE_PARAMETER_NAMES && is_testcase) ||
+            (option.args[2] in TEST_SUITE_PARAMETER_NAMES && !is_testcase)
+        )
     end
 
     # separate hook functions from other params
@@ -343,56 +403,74 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
     # If we're at the top level we'll default to RichReportingTestSet. Otherwise
     # default to the type of the parent testset
     if testsettype === nothing
-        testsettype = :(get_testset_depth() == 0 ? RichReportingTestSet : typeof(get_testset()))
+        testsettype = :(XUnit.get_testset_depth() == 0 ? RichReportingTestSet : typeof(XUnit.get_testset()))
     end
 
     # Generate a block of code that initializes a new testset, adds
     # it to the task local storage, evaluates the test(s), before
     # finally removes the testset and gives it a chance to take
     # action (such as reporting the results)
-    @assert tests.head == :block
+    @assert _is_block(tests)
     ex = quote
         # check that `testsettype` is a subtype of `AbstractTestSet` (otherwise, throw an error)
-        Test._check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
+        XUnit._check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         local ret = nothing
         local ts = $(testsettype)($desc; $options...)
-        Test.push_testset(ts)
+        XUnit.push_testset(ts)
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
         local RNG = Random.default_rng()
         local oldrng = copy(RNG)
-        local is_errored = false
+        local ret = nothing
         try
             # RNG is re-seeded with its own seed to ease reproduce a failed test
             Random.seed!(RNG.seed)
             ret = let
                 $(checked_testsuite_expr(desc, tests, source, hook_fn_options; is_testcase = is_testcase))
             end
-        catch
-            is_errored = true
-            rethrow()
         finally
             copy!(RNG, oldrng)
-            Test.pop_testset()
-            if !is_errored && $is_testset && get_testset_depth() == 0
-                # if there was no error during the scheduling and it's the topmost `@testset`
-                # (not enclosed in a `@testsuite`) then we want to run the scheduled tests
-                # using the `SequentialTestRunner` to keep the same semantics of `@testset`
-                # in `Base.Test`
-                run_testsuite(SequentialTestRunner, ret)
-                if TESTSET_PRINT_ENABLE[]
-                    TestReports.display_reporting_testset(ts)
-                end
-            end
+            XUnit.pop_testset()
         end
+
+        if ret !== nothing && XUnit.get_testset_depth() == 0
+            # if there was no error during the scheduling and it's the topmost `@testset`,
+            # `@testsuite` or `@testcase`, then we want to run the scheduled tests.
+            # If the `runner` keyword argument is used, that runner type is going to run
+            # the tests. Otherwise, `SequentialTestRunner` is used to keep the same
+            # semantics of `@testset` in `Base.Test`
+            run_testsuite(ret)
+        end
+
         ret
     end
     # preserve outer location if possible
-    if tests isa Expr && tests.head === :block && !isempty(tests.args) && tests.args[1] isa LineNumberNode
-        ex = Expr(:block, tests.args[1], ex)
+    if tests_is_block_with_location
+        ex = Expr(:block, tests_block_location, ex)
     end
     return ex
+end
+
+function run_testcase_inplace(testcase_obj)
+    testcase_obj.disabled && return
+
+    ts = testcase_obj.testset_report
+
+    try
+        # a test-case that is under another test-case is treated
+        # like a testset and runs immediately
+        # Note: `before_each` and `after_each` hooks are already
+        # ran for the top-most test-case and won't run again
+        XUnit.gather_test_metrics(testcase_obj; run=true)
+    catch err
+        err isa InterruptException && rethrow()
+        # something in the test block threw an error. Count that as an
+        # error in this test set
+        XUnit.record(ts, XUnit.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), testcase_obj.source))
+    end
+
+    return testcase_obj
 end
 
 # This function is the common function for handling the body of all `@testsuite`, `@testset`,
@@ -407,23 +485,23 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
         ts = get_testset()
 
         tls = task_local_storage()
-        added_tls, rs = initialize_xunit_tls_state(tls)
+        added_tls, rs = XUnit.initialize_xunit_tls_state(tls)
 
         local testsuite_or_testcase = nothing
 
         try
             std_io = IOBuffer()
-            if TESTSET_PRINT_ENABLE[]
+            if XUnit.TESTSET_PRINT_ENABLE[]
                 print(std_io, "  "^length(rs.stack))
             end
-            path = open_testset(rs, $name)
+            path = XUnit.open_testset(rs, $name)
             shouldrun = length(rs.stack) <= rs.maxdepth &&
-                    pmatch(rs.include, path) != nothing && pmatch(rs.exclude, path) == nothing
+                XUnit.pmatch(rs.include, path) != nothing && XUnit.pmatch(rs.exclude, path) == nothing
             rs.seen[path] = shouldrun
             parent_testsuite_obj = isempty(rs.test_suites_stack) ? nothing : last(rs.test_suites_stack)
 
             if shouldrun # if it's not disabled
-                if TESTSET_PRINT_ENABLE[]
+                if XUnit.TESTSET_PRINT_ENABLE[]
                     if $is_testcase && !haskey(tls, :__TESTCASE_IS_RUNNING__)
                         # if it's a `@testcase` NOT enclosed inside another `@testcase`,
                         # then it gets scheduled for running later
@@ -437,7 +515,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                     println(std_io, " tests...")
                 end
             else # skip disabled `@testsuite`s, `@testset`s, and `@testcase`s
-                if TESTSET_PRINT_ENABLE[]
+                if XUnit.TESTSET_PRINT_ENABLE[]
                     printstyled(std_io, "Skipped Scheduling $path tests...\n"; color=:light_black)
                 end
             end
@@ -449,7 +527,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
             $(
                 if !is_testcase #if it's a `@testsuite` or `@testset`, runs its body
                     quote
-                        testsuite_obj = AsyncTestSuite(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...)
+                        testsuite_obj = XUnit.AsyncTestSuite(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...)
 
                         push!(rs.test_suites_stack, testsuite_obj)
 
@@ -463,7 +541,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                             err isa InterruptException && rethrow()
                             # something in the test block threw an error. Count that as an
                             # error in this test set
-                            Test.record(ts, Test.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), testsuite_obj.source))
+                            XUnit.record(ts, XUnit.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), testsuite_obj.source))
                         finally
                             pop!(rs.test_suites_stack)
                         end
@@ -473,7 +551,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                 else
                     quote
                         testsuite_or_testcase = if shouldrun # if a `@testcase` is not disabled
-                            testcase_obj = AsyncTestCase(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...) do
+                            testcase_obj = XUnit.AsyncTestCase(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...) do
                                 $(esc(ts_expr))
                             end
 
@@ -482,23 +560,14 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                                 push!(rs.test_suites_stack, testcase_obj)
 
                                 try
-                                    # a test-case that is under another test-case is treated
-                                    # like a testset and runs immediately
-                                    # Note: `before_each` and `after_each` hooks are already
-                                    # ran for the top-most test-case and won't run again
-                                    testcase_obj.test_fn()
-                                catch err
-                                    err isa InterruptException && rethrow()
-                                    # something in the test block threw an error. Count that as an
-                                    # error in this test set
-                                    Test.record(ts, Test.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), testcase_obj.source))
+                                    run_testcase_inplace(testcase_obj)
                                 finally
                                     pop!(rs.test_suites_stack)
                                 end
                             end
                             testcase_obj
                         else  # if a `@testcase` is disabled, skipt it
-                            AsyncTestCase(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...) do
+                            XUnit.AsyncTestCase(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...) do
                                 nothing
                             end
                         end
@@ -506,7 +575,7 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                 end
             )
         finally
-            close_testset(rs)
+            XUnit.close_testset(rs)
             if added_tls
                 delete!(tls, :__XUNIT_STATE__)
             end
@@ -522,24 +591,38 @@ end
 
 """
     @testcase "test-case name" begin ... end
+    @testcase [before_each=()->...] [after_each=()->...] [metrics=DefaultTestMetrics] [success_handler=(testcase)->...] [failure_handler=(testcase)->...] [xml_report=false] [html_report=false] "test-case" begin ... end
 
 Defines a self-contained test-case.
 
 Test-cases are gathered at scheduling time and will get executed using a test-runner.
 As a test-runner can run tests in any order (and even on multiple threads/processes), it's
 strongly advised that test-cases do not depend on each other.
+
+## Keyword Arguments
+
+`@testsuite` takes four additional parameters:
+  - `metrics`: a custom `TestMetrics` type
+  - `success_handler`: a function to run after a successful handling of all tests. This function accepts the test-suite as an argument. This argument only works for the top-most `@testcase`.
+  - `failure_handler`: a function to run after a failed handling of all tests. This function accepts the test-suite as an argument. This argument only works for the top-most `@testcase`.
+  - `xml_report`: whether to produce the XML output file at the end. This argument only works for the top-most `@testcase`
+  - `html_report`: whether to produce the HTML output file at the end. This argument only works for the top-most `@testcase`
 """
 macro testcase(args...)
+    return testcase_handler(args, __source__)
+end
+
+function testcase_handler(args, source)
     isempty(args) && error("No arguments to @testcase")
 
     tests = args[end]
 
     # Determine if a single block or for-loop style
-    if !isa(tests, Expr) || tests.head !== :block
+    if !isa(tests, Expr) || !_is_block(tests)
         error("Expected begin/end block or for loop as argument to @testcase")
     end
 
-    return testsuite_beginend(args, tests, __source__, TestCaseType)
+    return testsuite_beginend(args, tests, source, TestCaseType)
 end
 
 # END TestCase
@@ -594,7 +677,7 @@ macro testset(args...)
     tests = args[end]
 
     # Determine if a single block or for-loop style
-    if !isa(tests,Expr) || (tests.head !== :for && tests.head !== :block)
+    if !isa(tests,Expr) || (tests.head !== :for && !_is_block(tests))
         error("Expected begin/end block or for loop as argument to @testset")
     end
 
@@ -724,7 +807,7 @@ function runtests(depth::Int, args...)
     runtests(testfile, depth, args...)
 end
 
-export RichReportingTestSet, html_output, html_report!, xml_output, xml_report!
+export RichReportingTestSet, html_output, html_report, xml_output, xml_report
 export clear_test_reports!, test_out_io, test_err_io, test_print, test_println
 
 export @testset, @test_broken
@@ -751,7 +834,9 @@ export GenericString, GenericSet, GenericDict, GenericArray
 export TestSetException
 export get_testset, get_testset_depth, run_testsuite
 export AbstractTestSet, DefaultTestSet, record, finish
-export TestRunner, SequentialTestRunner, ShuffledTestRunner, ParallelTestRunner
-export display_reporting_testset
+export TestRunner
+export SequentialTestRunner, ShuffledTestRunner, ParallelTestRunner
+export TestMetrics
+export display_reporting_testset, gather_test_metrics, combine_test_metrics, save_test_metrics
 
 end
