@@ -44,7 +44,9 @@ function gather_test_metrics(t::AsyncTestSuite; run::Bool=true)
 end
 
 function gather_test_metrics(t::AsyncTestCase; run::Bool=true)
-    !t.disabled && gather_test_metrics(t.test_fn, t; run=run)
+    !t.disabled && gather_test_metrics(t; run=run) do
+        t.test_fn()
+    end
 end
 
 function gather_test_metrics(fn::Function, t::AsyncTestCase; run::Bool=true)
