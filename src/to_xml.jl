@@ -196,10 +196,6 @@ function include_test_outputs(ts_rich, x_testsuite)
     end
 end
 
-function to_xml(ts::ReportingTestSet)
-    return TestReports.to_xml(ts)
-end
-
 """
     to_xml(res::Pass)
     to_xml(res::Fail)
