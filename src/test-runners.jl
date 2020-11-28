@@ -321,7 +321,7 @@ function run_single_testcase(
         for testsuite in parent_testsets
             testsuite.before_each_hook()
         end
-        gather_test_metrics(sub_testcase; run=true)
+        run_and_gather_test_metrics(sub_testcase; run=true)
         for testsuite in reverse(parent_testsets)
             testsuite.after_each_hook()
         end
