@@ -8,6 +8,12 @@ function DefaultTestMetrics()
     return DefaultTestMetrics(0, 0, 0, Base.GC_Diff(0, 0, 0, 0, 0, 0, 0, 0, 0))
 end
 
+"""
+    create_new_measure_instance(::Type{T}; report_metric::Bool) where T <: TestMetrics
+
+Creates a new instance of `T` and determines whether the collect metrics should be
+reported (when `save_test_metrics` is called)
+"""
 function create_new_measure_instance end
 
 # This is the main method to overload for your custom `TestMetrics` type
@@ -28,8 +34,6 @@ function create_new_measure_instance(::Nothing; report_metric::Bool)
     return create_new_measure_instance(Nothing; report_metric=report_metric)
 end
 
-function gather_test_metrics end
-
 function gather_test_metrics(t::AsyncTestSuite; run::Bool=true)
     if !t.disabled
         for sub_testsuite in t.sub_testsuites
@@ -43,23 +47,23 @@ function gather_test_metrics(t::AsyncTestSuite; run::Bool=true)
     end
 end
 
-function gather_test_metrics(t::AsyncTestCase; run::Bool=true)
-    !t.disabled && gather_test_metrics(t; run=run) do
+function run_and_gather_test_metrics(t::AsyncTestCase; run::Bool=true)
+    !t.disabled && run_and_gather_test_metrics(t; run=run) do
         t.test_fn()
     end
 end
 
-function gather_test_metrics(fn::Function, t::AsyncTestCase; run::Bool=true)
-    return gather_test_metrics(fn, t.testset_report, t.metrics; run=run)
+function run_and_gather_test_metrics(fn::Function, t::AsyncTestCase; run::Bool=true)
+    return run_and_gather_test_metrics(fn, t.testset_report, t.metrics; run=run)
 end
 
-function gather_test_metrics(fn::Function, ::AbstractTestSet, ::Nothing; run::Bool=true)
+function run_and_gather_test_metrics(fn::Function, ::AbstractTestSet, ::Nothing; run::Bool=true)
     !run && return nothing
     # nothing to measure by default
     return fn()
 end
 
-function gather_test_metrics(
+function run_and_gather_test_metrics(
     fn::Function, ts::AbstractTestSet, m::DefaultTestMetrics; run::Bool=true
 )
     !run && return nothing
@@ -72,6 +76,12 @@ function gather_test_metrics(
     return val
 end
 
+"""
+    save_test_metrics(ts::AsyncTestCase)
+    save_test_metrics(ts::AsyncTestSuite)
+
+Saves the collected metrics for a test-case or test-suite
+"""
 function save_test_metrics(ts::AsyncTestCase)
     !ts.disabled && save_test_metrics(ts.testset_report, ts.metrics)
 end
@@ -90,6 +100,11 @@ function save_test_metrics(::AbstractTestSet, ::Option{DefaultTestMetrics})
     # nothing to do
 end
 
+"""
+    combine_test_metrics(parent, sub)
+
+Combines the merics results from a `sub` into its `parent`
+"""
 function combine_test_metrics(parent, sub)
     # nothing to do
 end
@@ -120,6 +135,16 @@ function combine_test_metrics(parent::DefaultTestMetrics, sub::DefaultTestMetric
     nothing
 end
 
+"""
+    create_test_metrics(
+        parent_testsuite::Option{AsyncTestSuiteOrTestCase}, ::Type{T}
+    ) where T <: TestMetrics
+
+Creates a new `TestMetrics` instance based on the given type `T`
+
+If `T` is `Nothing`, then an instance of `TestMetrics` similar to `parent_testsuite.metrics`
+is created (if it exists). Otherwise, returns `nothing`.
+"""
 function create_test_metrics(
     parent_testsuite::Option{AsyncTestSuiteOrTestCase}, ::Type{T}
 ) where T <: TestMetrics
@@ -141,4 +166,19 @@ function create_test_metrics(
     return parent_testsuite === nothing ?
         nothing :
         create_new_measure_instance(parent_testsuite.metrics; report_metric=false)
+end
+
+"""
+    should_report_metric(ts::AsyncTestSuiteOrTestCase)
+    should_report_metric(::Option{TestMetrics})
+
+Determines wether a test-case, test-suite or TestMetrics instance should report its result
+back and save its results (when `save_test_metrics` is called)
+"""
+function should_report_metric(ts::AsyncTestSuiteOrTestCase)
+    return should_report_metric(ts.metrics)
+end
+
+function should_report_metric(::Option{TestMetrics})
+    return false
 end
