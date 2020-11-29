@@ -304,7 +304,9 @@ end
 
 """
     @testsuite "suite name" begin ... end
-    @testsuite [before_each=()->...] [after_each=()->...] [metrics=DefaultTestMetrics] [success_handler=(testsuite)->...] [failure_handler=(testsuite)->...] [xml_report=false] [html_report=false] "suite name" begin ... end
+    @testsuite [before_each=()->...] [after_each=()->...] [metrics=DefaultTestMetrics]
+               [success_handler=(testsuite)->...] [failure_handler=(testsuite)->...]
+               [xml_report=false] [html_report=false] "suite name" begin ... end
 
 Schedules a Test Suite
 
@@ -324,10 +326,16 @@ defined under a `@testsuite` are executed sequentially at scheduling time.
   - `before_each`: a function to run before each underlying test-case
   - `after_each`: a function to run after each underlying test-case
   - `metrics`: a custom `TestMetrics` type
-  - `success_handler`: a function to run after a successful handling of all tests. This function accepts the test-suite as an argument. This argument only works for the top-most `@testsuite`.
-  - `failure_handler`: a function to run after a failed handling of all tests. This function accepts the test-suite as an argument. This argument only works for the top-most `@testsuite`.
-  - `xml_report`: whether to produce the XML output file at the end. This argument only works for the top-most `@testsuite`
-  - `html_report`: whether to produce the HTML output file at the end. This argument only works for the top-most `@testsuite`
+  - `success_handler`: a function to run after a successful handling of all tests. This
+    function accepts the test-suite as an argument. This argument only works for the
+    top-most `@testsuite`.
+  - `failure_handler`: a function to run after a failed handling of all tests. This function
+    accepts the test-suite as an argument. This argument only works for the top-most
+    `@testsuite`.
+  - `xml_report`: whether to produce the XML output file at the end.
+    This argument only works for the top-most `@testsuite`
+  - `html_report`: whether to produce the HTML output file at the end.
+    This argument only works for the top-most `@testsuite`
 """
 macro testsuite(args...)
     return testsuite_handler(args, __source__)
@@ -406,7 +414,9 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
     # If we're at the top level we'll default to RichReportingTestSet. Otherwise
     # default to the type of the parent testset
     if testsettype === nothing
-        testsettype = :(XUnit.get_testset_depth() == 0 ? RichReportingTestSet : typeof(XUnit.get_testset()))
+        testsettype = :(XUnit.get_testset_depth() == 0 ?
+                            RichReportingTestSet :
+                            typeof(XUnit.get_testset()))
     end
 
     # Generate a block of code that initializes a new testset, adds
@@ -415,7 +425,8 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
     # action (such as reporting the results)
     @assert _is_block(tests)
     ex = quote
-        # check that `testsettype` is a subtype of `AbstractTestSet` (otherwise, throw an error)
+        # check that `testsettype` is a subtype of `AbstractTestSet`
+        # (otherwise, throw an error)
         XUnit._check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         local ret = nothing
         local ts = $(testsettype)($desc; $options...)
@@ -430,7 +441,9 @@ function testsuite_beginend(args, tests, source, suite_type::SuiteType)
             # RNG is re-seeded with its own seed to ease reproduce a failed test
             Random.seed!(RNG.seed)
             ret = let
-                $(checked_testsuite_expr(desc, tests, source, hook_fn_options; is_testcase = is_testcase))
+                $(checked_testsuite_expr(
+                    desc, tests, source, hook_fn_options; is_testcase = is_testcase
+                ))
             end
         finally
             copy!(RNG, oldrng)
@@ -475,7 +488,9 @@ function run_testcase_inplace(testcase_obj)
         err isa InterruptException && rethrow()
         # something in the test block threw an error. Count that as an
         # error in this test set
-        XUnit.record(ts, XUnit.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), testcase_obj.source))
+        XUnit.record(ts, XUnit.Error(
+            :nontest_error, Expr(:tuple), err, Base.catch_stack(), testcase_obj.source
+        ))
     end
 
     return testcase_obj
@@ -488,7 +503,9 @@ end
 # - if it's a `@testcase`:
 #   - if it IS NOT enclosed inside another `@testcase`, then it schedules it for running later
 #   - if it IS enclosed inside another `@testcase`, runs its body
-function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_options; is_testcase::Bool = false)
+function checked_testsuite_expr(
+    name::Expr, ts_expr::Expr, source, hook_fn_options; is_testcase::Bool = false
+)
     quote
         ts = get_testset()
 
@@ -504,9 +521,14 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
             end
             path = XUnit.open_testset(rs, $name)
             shouldrun = length(rs.stack) <= rs.maxdepth &&
-                XUnit.pmatch(rs.include, path) != nothing && XUnit.pmatch(rs.exclude, path) == nothing
+                        XUnit.pmatch(rs.include, path) != nothing &&
+                        XUnit.pmatch(rs.exclude, path) == nothing
             rs.seen[path] = shouldrun
-            parent_testsuite_obj = isempty(rs.test_suites_stack) ? nothing : last(rs.test_suites_stack)
+            parent_testsuite_obj = if isempty(rs.test_suites_stack)
+                nothing
+            else
+                last(rs.test_suites_stack)
+            end
 
             if shouldrun # if it's not disabled
                 if XUnit.TESTSET_PRINT_ENABLE[]
@@ -524,7 +546,9 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                 end
             else # skip disabled `@testsuite`s, `@testset`s, and `@testcase`s
                 if XUnit.TESTSET_PRINT_ENABLE[]
-                    printstyled(std_io, "Skipped Scheduling $path tests...\n"; color=:light_black)
+                    printstyled(
+                        std_io, "Skipped Scheduling $path tests...\n"; color=:light_black
+                    )
                 end
             end
 
@@ -535,7 +559,10 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
             $(
                 if !is_testcase #if it's a `@testsuite` or `@testset`, runs its body
                     quote
-                        testsuite_obj = XUnit.AsyncTestSuite(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...)
+                        testsuite_obj = XUnit.AsyncTestSuite(
+                            ts, $(QuoteNode(source)), parent_testsuite_obj;
+                            disabled=!shouldrun, $(esc(hook_fn_options))...
+                        )
 
                         push!(rs.test_suites_stack, testsuite_obj)
 
@@ -549,7 +576,13 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                             err isa InterruptException && rethrow()
                             # something in the test block threw an error. Count that as an
                             # error in this test set
-                            XUnit.record(ts, XUnit.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), testsuite_obj.source))
+                            XUnit.record(ts, XUnit.Error(
+                                :nontest_error,
+                                Expr(:tuple),
+                                err,
+                                Base.catch_stack(),
+                                testsuite_obj.source
+                            ))
                         finally
                             pop!(rs.test_suites_stack)
                         end
@@ -559,8 +592,10 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                 else
                     quote
                         testsuite_or_testcase = if shouldrun # if a `@testcase` is not disabled
-                            testcase_obj = XUnit.AsyncTestCase(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...) do
-                                $(esc(ts_expr))
+                            testcase_obj = XUnit.AsyncTestCase(
+                                ts, $(QuoteNode(source)), parent_testsuite_obj;
+                                disabled=!shouldrun, $(esc(hook_fn_options))...) do
+                                    $(esc(ts_expr))
                             end
 
                             # if it IS enclosed inside another `@testcase`, we run it immediately
@@ -575,8 +610,10 @@ function checked_testsuite_expr(name::Expr, ts_expr::Expr, source, hook_fn_optio
                             end
                             testcase_obj
                         else  # if a `@testcase` is disabled, skipt it
-                            XUnit.AsyncTestCase(ts, $(QuoteNode(source)), parent_testsuite_obj; disabled=!shouldrun, $(esc(hook_fn_options))...) do
-                                nothing
+                            XUnit.AsyncTestCase(
+                                ts, $(QuoteNode(source)), parent_testsuite_obj;
+                                disabled=!shouldrun, $(esc(hook_fn_options))...) do
+                                    nothing
                             end
                         end
                     end
@@ -599,7 +636,9 @@ end
 
 """
     @testcase "test-case name" begin ... end
-    @testcase [before_each=()->...] [after_each=()->...] [metrics=DefaultTestMetrics] [success_handler=(testcase)->...] [failure_handler=(testcase)->...] [xml_report=false] [html_report=false] "test-case" begin ... end
+    @testcase [before_each=()->...] [after_each=()->...] [metrics=DefaultTestMetrics]
+              [success_handler=(testcase)->...] [failure_handler=(testcase)->...]
+              [xml_report=false] [html_report=false] "test-case" begin ... end
 
 Defines a self-contained test-case.
 
@@ -611,10 +650,16 @@ strongly advised that test-cases do not depend on each other.
 
 `@testsuite` takes four additional parameters:
   - `metrics`: a custom `TestMetrics` type
-  - `success_handler`: a function to run after a successful handling of all tests. This function accepts the test-suite as an argument. This argument only works for the top-most `@testcase`.
-  - `failure_handler`: a function to run after a failed handling of all tests. This function accepts the test-suite as an argument. This argument only works for the top-most `@testcase`.
-  - `xml_report`: whether to produce the XML output file at the end. This argument only works for the top-most `@testcase`
-  - `html_report`: whether to produce the HTML output file at the end. This argument only works for the top-most `@testcase`
+  - `success_handler`: a function to run after a successful handling of all tests. This
+    function accepts the test-suite as an argument. This argument only works for the
+    top-most `@testcase`.
+  - `failure_handler`: a function to run after a failed handling of all tests. This function
+    accepts the test-suite as an argument. This argument only works for the top-most
+    `@testcase`.
+  - `xml_report`: whether to produce the XML output file at the end.
+    This argument only works for the top-most `@testcase`
+  - `html_report`: whether to produce the HTML output file at the end.
+    This argument only works for the top-most `@testcase`
 """
 macro testcase(args...)
     return testcase_handler(args, __source__)
@@ -714,11 +759,15 @@ end
 # We do not want to print all non-relevant stack-trace related to `XUnit` or Julia internals
 # This function overload handles this scrubbing and stacktrace cleanup
 function Test.scrub_backtrace(bt::Vector)
-    do_test_ind = findfirst(ip -> Test.ip_has_file_and_func(ip, joinpath(@__DIR__, "rich-reporting-testset.jl"), (:display_reporting_testset,)), bt)
+    do_test_ind = findfirst(ip -> Test.ip_has_file_and_func(
+        ip, joinpath(@__DIR__, "rich-reporting-testset.jl"), (:display_reporting_testset,)
+    ), bt)
     if do_test_ind !== nothing && length(bt) > do_test_ind
         bt = bt[do_test_ind + 1:end]
     end
-    name_ind = findfirst(ip -> Test.ip_has_file_and_func(ip, @__FILE__, (Symbol("macro expansion"),)), bt)
+    name_ind = findfirst(ip -> Test.ip_has_file_and_func(
+        ip, @__FILE__, (Symbol("macro expansion"),)
+    ), bt)
     if name_ind !== nothing && length(bt) != 0
         bt = bt[1:name_ind]
     end

@@ -174,6 +174,14 @@ end
 
 Determines wether a test-case, test-suite or TestMetrics instance should report its result
 back and save its results (when `save_test_metrics` is called)
+
+`AsyncTestCase.metrics` and `AsyncTestSuite.metrics` are already optional fields.
+If you mark a `@testcase` or `@testsuite` with an explicit `metrics` parameter, then it will
+report the metrics for that test-case or test-suite.
+However, for a `@testsuite` (that can have other test-cases or test-suites (hierarchy)
+underneath itself), we still need to collect metrics for all those test-cases and
+test-suites, even though we won't report them. We use those collected metrics to report
+the metrics to their parent (by aggregating them at parent).
 """
 function should_report_metric(ts::AsyncTestSuiteOrTestCase)
     return should_report_metric(ts.metrics)
