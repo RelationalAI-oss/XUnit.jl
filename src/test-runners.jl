@@ -517,9 +517,13 @@ function _run_scheduled_tests(
                 last_i = i
             end
         finally
-            # at the end of all jobs, we put a sentinel for each worker process to know that
+            # At the end of all jobs, we put a sentinel for each worker process to know that
             # it can peacefully die, as there will not be any further tests to run
-            for i in 1:num_workers
+            # In addition, we also add one more sentinel for the main process to consume
+            # in the even of a critical failure in a worker to be able to drain the
+            # remaining jobs (so that the remaining healthy workers will not continue
+            # processing the remaining tests)
+            for i in 1:(num_workers+1)
                 put!(jobs, (-1, nothing))
             end
         end
@@ -571,8 +575,12 @@ function _run_scheduled_tests(
         # remaining tests
         # Note: if some worker processes are still alive, they might continue processing
         #       tests, but their produced results are not consumed anymore.
-        #       One approach to improve this is by limitting the size of `results` channel.
+        #       That's why the main process first tries to drain the whole `jobs` channel.
         if job_id == 0
+            while true
+                (scheduled_tests_index, _) = take!(jobs)
+                scheduled_tests_index == -1 && break
+            end
             for (job_id, ishandled) in enumerate(handled_scheduled_tests)
                 if !ishandled
                     orig_test_case = scheduled_tests[job_id].target_testcase
