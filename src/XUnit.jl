@@ -477,7 +477,10 @@ function run_testcase_inplace(testcase_obj)
         # like a testset and runs immediately
         # Note: `before_each` and `after_each` hooks are already
         # ran for the top-most test-case and won't run again
-        # Note: there's no need to measure
+        # Note: there's no need to gather metrics for a test-case if it's not explicitly
+        # marked for statistics collection. These non-top-level test-cases are guaranteed to
+        # run sequentially (in a single process/thread) and cannot comprise of smaller
+        # execution units that run out-of-order.
         if XUnit.should_report_metric(testcase_obj)
             XUnit.run_and_gather_test_metrics(testcase_obj; run=true)
         else
