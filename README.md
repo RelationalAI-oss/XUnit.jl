@@ -135,68 +135,59 @@ Running Top Parent tests...
     Running Top Parent/XTest 3/Child XTest 3 tests...
       Scheduling Top Parent/XTest 3/Child XTest 3/Child XTest 3-1 tests...
       Scheduling Top Parent/XTest 3/Child XTest 3/Child XTest 3-2 tests...
--> Running Top Parent/XTest 2/Child XTest 12 test-case (on tid=4)...
--> Running Top Parent/XTest 3/Child XTest 3/Child XTest 3-1 test-case (on tid=3)...
--> Running Top Parent/XTest 2/Child XTest 5 test-case (on tid=2)...
 -> Running Top Parent/XTest 3/Child XTest 3/Child XTest 3-2 test-case (on tid=1)...
--> Running Top Parent/XTest 2/Child XTest 4 test-case (on tid=2)...
--> Running Top Parent/XTest 1/Child XTest 3 test-case (on tid=4)...
--> Running Top Parent/XTest 1/Child XTest 1 test-case (on tid=2)...
-Child XTest 3: Test Failed at ./XUnit/test/unittests.jl:22
+-> Running Top Parent/XTest 3/Child XTest 3/Child XTest 3-1 test-case (on tid=1)...
+-> Running Top Parent/XTest 2/Child XTest 12 test-case (on tid=1)...
+-> Running Top Parent/XTest 2/Child XTest 5 test-case (on tid=1)...
+-> Running Top Parent/XTest 2/Child XTest 4 test-case (on tid=1)...
+-> Running Top Parent/XTest 1/Child XTest 3 test-case (on tid=1)...
+-> Running Top Parent/XTest 1/Child XTest 1 test-case (on tid=1)...
+Child XTest 3: Test Failed at ./XUnit/test/unittests.jl:19
   Expression: 2 * 2 == 5
    Evaluated: 4 == 5
-Child XTest 3: Error During Test at ./XUnit/test/unittests.jl:23
+Child XTest 3: Error During Test at ./XUnit/test/unittests.jl:20
   Test threw exception
   Expression: fn_throws()
   KeyError: key "Test error!" not found
   Stacktrace:
-   [1] fn_throws() at ./XUnit/test/unittests.jl:4
-   [2] macro expansion at ./XUnit/test/unittests.jl:23 [inlined]
-   [3] (::var"#4#19")() at ./XUnit/src/XUnit.jl:557
-   [4] gather_test_metrics(::var"#4#19", ::RichReportingTestSet, ::Nothing; run::Bool) at ./XUnit/src/test-metrics.jl:57
-   [5] gather_test_metrics(::Function, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}; run::Bool) at ./XUnit/src/test-metrics.jl:51
-   [6] #gather_test_metrics#60 at ./XUnit/src/test-metrics.jl:47 [inlined]
-   [7] run_single_testcase(::Array{XUnit.AsyncTestSuite,1}, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}) at ./XUnit/src/test-runners.jl:287
-   [8] macro expansion at ./XUnit/src/test-runners.jl:186 [inlined]
-   [9] (::XUnit.var"#54#threadsfor_fun#22"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})(::Bool) at ./threadingconstructs.jl:81
-   [10] (::XUnit.var"#54#threadsfor_fun#22"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})() at ./threadingconstructs.jl:48
+   [1] fn_throws() at ./XUnit/test/unittests.jl:3
+   [2] macro expansion at ./XUnit/test/unittests.jl:20 [inlined]
+   [3] (::var"#4#19")() at ./XUnit/src/XUnit.jl:590
+   [4] run_single_testcase(::Array{XUnit.AsyncTestSuite,1}, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}) at ./XUnit/src/test-runners.jl:278
+   [5] macro expansion at ./XUnit/src/test-runners.jl:183 [inlined]
+   [6] (::XUnit.var"#54#threadsfor_fun#22"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})(::Bool) at ./threadingconstructs.jl:81
+   [7] (::XUnit.var"#54#threadsfor_fun#22"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})() at ./threadingconstructs.jl:48
 
-Child XTest 4: Test Failed at ./XUnit/test/unittests.jl:33
+Child XTest 4: Test Failed at ./XUnit/test/unittests.jl:30
   Expression: fn_nothrows()
     Expected: KeyError
   No exception thrown
-Child XTest 12: Test Failed at ./XUnit/test/unittests.jl:44
+Child XTest 12: Test Failed at ./XUnit/test/unittests.jl:41
   Expression: 1212 == 1212 * 2
    Evaluated: 1212 == 2424
-Child XTest 3-1: Error During Test at ./XUnit/test/unittests.jl:51
+Child XTest 3-1: Error During Test at ./XUnit/test/unittests.jl:48
   Got exception outside of a @test
   AssertionError: 5 == 9
   Stacktrace:
-   [1] macro expansion at ./XUnit/test/unittests.jl:53 [inlined]
-   [2] (::var"#12#27")() at ./XUnit/src/XUnit.jl:557
-   [3] gather_test_metrics(::var"#12#27", ::RichReportingTestSet, ::Nothing; run::Bool) at ./XUnit/src/test-metrics.jl:57
-   [4] gather_test_metrics(::Function, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}; run::Bool) at ./XUnit/src/test-metrics.jl:51
-   [5] #gather_test_metrics#60 at ./XUnit/src/test-metrics.jl:47 [inlined]
-   [6] run_single_testcase(::Array{XUnit.AsyncTestSuite,1}, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}) at ./XUnit/src/test-runners.jl:287
-   [7] macro expansion at ./XUnit/src/test-runners.jl:186 [inlined]
-   [8] (::XUnit.var"#54#threadsfor_fun#22"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})(::Bool) at ./threadingconstructs.jl:81
-   [9] (::XUnit.var"#54#threadsfor_fun#22"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})() at ./threadingconstructs.jl:48
+   [1] macro expansion at ./XUnit/test/unittests.jl:50 [inlined]
+   [2] (::var"#12#27")() at ./XUnit/src/XUnit.jl:590
+   [3] run_single_testcase(::Array{XUnit.AsyncTestSuite,1}, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}) at ./XUnit/src/test-runners.jl:278
+   [4] macro expansion at ./XUnit/src/test-runners.jl:183 [inlined]
+   [5] (::XUnit.var"#54#threadsfor_fun#22"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})(::Bool) at ./threadingconstructs.jl:81
+   [6] (::XUnit.var"#54#threadsfor_fun#22"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})() at ./threadingconstructs.jl:48
 
-Child XTest 3-2: Error During Test at ./XUnit/test/unittests.jl:61
+Child XTest 3-2: Error During Test at ./XUnit/test/unittests.jl:58
   Test threw exception
   Expression: fn_throws()
   KeyError: key "Test error!" not found
   Stacktrace:
-   [1] fn_throws() at ./XUnit/test/unittests.jl:4
-   [2] macro expansion at ./XUnit/test/unittests.jl:61 [inlined]
-   [3] (::var"#14#29")() at ./XUnit/src/XUnit.jl:557
-   [4] gather_test_metrics(::var"#14#29", ::RichReportingTestSet, ::Nothing; run::Bool) at ./XUnit/src/test-metrics.jl:57
-   [5] gather_test_metrics(::Function, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}; run::Bool) at ./XUnit/src/test-metrics.jl:51
-   [6] #gather_test_metrics#60 at ./XUnit/src/test-metrics.jl:47 [inlined]
-   [7] run_single_testcase(::Array{XUnit.AsyncTestSuite,1}, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}) at ./XUnit/src/test-runners.jl:287
-   [8] macro expansion at ./XUnit/src/test-runners.jl:186 [inlined]
-   [9] (::XUnit.var"#54#threadsfor_fun#22"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})(::Bool) at ./threadingconstructs.jl:81
-   [10] (::XUnit.var"#54#threadsfor_fun#22"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})() at ./threadingconstructs.jl:48
+   [1] fn_throws() at ./XUnit/test/unittests.jl:3
+   [2] macro expansion at ./XUnit/test/unittests.jl:58 [inlined]
+   [3] (::var"#14#29")() at ./XUnit/src/XUnit.jl:590
+   [4] run_single_testcase(::Array{XUnit.AsyncTestSuite,1}, ::XUnit._AsyncTestCase{XUnit.AsyncTestSuite}) at ./XUnit/src/test-runners.jl:278
+   [5] macro expansion at ./XUnit/src/test-runners.jl:183 [inlined]
+   [6] (::XUnit.var"#54#threadsfor_fun#22"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})(::Bool) at ./threadingconstructs.jl:81
+   [7] (::XUnit.var"#54#threadsfor_fun#22"{Array{XUnit.ScheduledTest,1},Base.Threads.Atomic{Int64},Bool,Nothing,UnitRange{Int64}})() at ./threadingconstructs.jl:48
 
 Test Summary:         | Pass  Fail  Error  Total
 Top Parent            |   20     3      3     26
@@ -212,7 +203,7 @@ Top Parent            |   20     3      3     26
       Child XTest 3-1 |                 1      1
       Child XTest 3-2 |    3            1      4
 ERROR: LoadError: Some tests did not pass: 20 passed, 3 failed, 3 errored, 0 broken.
-in expression starting at ./XUnit/test/unittests.jl:11
+in expression starting at ./XUnit/test/unittests.jl:8
 ```
 
 ## Contributing
