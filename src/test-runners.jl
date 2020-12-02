@@ -25,7 +25,7 @@ function run_testsuite(
     # as it means that tests haven't ran and will run seprately
     if _run_testsuite(T, testsuite)
         _finalize_reports(testsuite)
-        gather_test_metrics(testsuite; run=false)
+        gather_test_metrics(testsuite)
         save_test_metrics(testsuite)
         if show_stdout
             display_reporting_testset(testsuite, throw_on_error=false)

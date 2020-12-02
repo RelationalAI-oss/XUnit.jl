@@ -34,10 +34,10 @@ function create_new_measure_instance(::Nothing; report_metric::Bool)
     return create_new_measure_instance(Nothing; report_metric=report_metric)
 end
 
-function gather_test_metrics(t::AsyncTestSuite; run::Bool=true)
+function gather_test_metrics(t::AsyncTestSuite)
     if !t.disabled
         for sub_testsuite in t.sub_testsuites
-            gather_test_metrics(sub_testsuite; run=run)
+            gather_test_metrics(sub_testsuite)
             combine_test_metrics(t, sub_testsuite)
         end
 
@@ -45,6 +45,10 @@ function gather_test_metrics(t::AsyncTestSuite; run::Bool=true)
             combine_test_metrics(t, sub_testcase)
         end
     end
+end
+
+function gather_test_metrics(t::AsyncTestCase)
+    run_and_gather_test_metrics(t; run = false)
 end
 
 function run_and_gather_test_metrics(t::AsyncTestCase; run::Bool=true)
