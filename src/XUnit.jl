@@ -1,6 +1,7 @@
 module XUnit
 
 using Base: @lock, ReentrantLock
+using Distributed #for DistributedTestRunner
 import Test
 using Test: AbstractTestSet, Result, Fail, Broken, Pass, Error
 using Test: TESTSET_PRINT_ENABLE, get_testset_depth, get_testset
@@ -818,12 +819,34 @@ in `args`.  See alternative form of `runtests` for examples.
 """
 function runtests(filepath::String, args...)
     runtests(typemax(Int), args...) do
-        @eval Main begin
-            # Construct a new throw-away module in which to run the tests
-            # (see https://github.com/RelationalAI-oss/XUnit.jl/issues/2)
-            m = @eval Main module $(gensym("XUnitModule")) end  # e.g. Main.##XUnitModule#365
-            # Perform the include inside the new module m
-            m.include($filepath)
+        XUnitModuleName = replace(string(gensym("XUnitModule")), "#" => "_")
+        GLOBAL_TEST_FILENAME = filepath
+        GLOBAL_TEST_MOD = string("module ",XUnitModuleName, "; ",read(filepath, String), "\nend")
+        Core.eval(Main, Expr(:(=), :GLOBAL_TEST_MOD, GLOBAL_TEST_MOD))
+        Core.eval(Main, Expr(:(=), :GLOBAL_TEST_FILENAME, GLOBAL_TEST_FILENAME))
+        @passobj 1 workers() GLOBAL_TEST_FILENAME
+        @passobj 1 workers() GLOBAL_TEST_MOD
+        @everywhere begin
+            tls = task_local_storage()
+            has_saved_source_path = haskey(tls, :SOURCE_PATH)
+            saved_source_path = has_saved_source_path ? tls[:SOURCE_PATH] : nothing
+            try
+                # we are setting the thread-local `:SOURCE_PATH` for Julia's `include`
+                # mechanism to work correctly. Otheriwse, the direct `include`s inside the
+                # test file located at `filepath` won't work.
+                if ispath(Main.GLOBAL_TEST_FILENAME)
+                    tls[:SOURCE_PATH] = Main.GLOBAL_TEST_FILENAME
+                end
+
+                include_string(Main, Main.GLOBAL_TEST_MOD, Main.GLOBAL_TEST_FILENAME)
+
+            finally
+                if has_saved_source_path
+                    tls[:SOURCE_PATH] = saved_source_path
+                else
+                    delete!(tls, :SOURCE_PATH)
+                end
+            end
         end
     end
 end
@@ -894,7 +917,7 @@ export TestSetException
 export get_testset, get_testset_depth, run_testsuite
 export AbstractTestSet, DefaultTestSet, record, finish
 export TestRunner
-export SequentialTestRunner, ShuffledTestRunner, ParallelTestRunner
+export SequentialTestRunner, ShuffledTestRunner, ParallelTestRunner, DistributedTestRunner
 export TestMetrics, DefaultTestMetrics
 export display_reporting_testset, gather_test_metrics, combine_test_metrics
 export run_and_gather_test_metrics, save_test_metrics

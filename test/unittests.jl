@@ -1,6 +1,6 @@
-module UnitTests
-
 using XUnit
+
+include(joinpath(@__DIR__, "subdir2/subdir2-macrodef.jl"))
 
 function fn_throws()
     throw(KeyError("Test error!"))
@@ -21,8 +21,9 @@ println("Running tests with $(Threads.nthreads()) threads")
 
 topname = "ABC"
 bottomname = "XYZ"
-@testcase "Top XParent $topname" html_report=true success_handler=(testsuite) -> run(`open ./$(html_output(testsuite))`) failure_handler=(testsuite) -> run(`open ./$(html_output(testsuite))`) begin
-    @testcase "XTest 1" begin
+
+@testsuite "Top XParent $topname" metrics=SubModule.MyTestMetrics runner=DistributedTestRunner() html_report=true success_handler=(testsuite) -> run(`open ./$(html_output(testsuite))`) failure_handler=(testsuite) -> run(`open ./$(html_output(testsuite))`) begin
+    @testset "XTest 1" before_each=before_each_fn_gen("Child XTest 1") begin
         @testcase "Child XTest 1 $bottomname" begin
             @test 1 == 1
             @test 2 == 2
@@ -154,8 +155,7 @@ bottomname = "XYZ"
             @test 33 == 33
         end
     end
+    include("subdir1/subdir1-unittest.jl")
 end
 
 nothing
-
-end
