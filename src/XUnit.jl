@@ -820,32 +820,45 @@ in `args`.  See alternative form of `runtests` for examples.
 """
 function runtests(filepath::String, args...)
     runtests(typemax(Int), args...) do
-        XUnitModuleName = replace(string(gensym("XUnitModule")), "#" => "_")
-        GLOBAL_TEST_FILENAME = filepath
-        GLOBAL_TEST_MOD = string("module ",XUnitModuleName, "; ",read(filepath, String), "\nend")
-        Core.eval(Main, Expr(:(=), :GLOBAL_TEST_MOD, GLOBAL_TEST_MOD))
-        Core.eval(Main, Expr(:(=), :GLOBAL_TEST_FILENAME, GLOBAL_TEST_FILENAME))
-        @passobj 1 workers() GLOBAL_TEST_FILENAME
-        @passobj 1 workers() GLOBAL_TEST_MOD
-        @everywhere begin
-            tls = task_local_storage()
-            has_saved_source_path = haskey(tls, :SOURCE_PATH)
-            saved_source_path = has_saved_source_path ? tls[:SOURCE_PATH] : nothing
-            try
-                # we are setting the thread-local `:SOURCE_PATH` for Julia's `include`
-                # mechanism to work correctly. Otheriwse, the direct `include`s inside the
-                # test file located at `filepath` won't work.
-                if ispath(Main.GLOBAL_TEST_FILENAME)
-                    tls[:SOURCE_PATH] = Main.GLOBAL_TEST_FILENAME
-                end
+        if nworkers() == 1
+            # Using a single worker, there's no need to do fancy distributed execution
+            @eval Main begin
+                # Construct a new throw-away module in which to run the tests
+                m = @eval Main module $(gensym("XUnitModule")) end  # e.g. Main.##XUnitModule#365
+                # Perform the include inside the new module m
+                m.include($filepath)
+            end
+        else
+            # When we have several workers available, we'd prepare for `Distributed` execution
+            # Even though, still, the underlying test-suite should explicitly request it via
+            # the `runner=DistributedTestRunner()` keyword argument.
+            XUnitModuleName = replace(string(gensym("XUnitModule")), "#" => "_")
+            GLOBAL_TEST_FILENAME = filepath
+            GLOBAL_TEST_MOD = string("module ",XUnitModuleName, "; ",read(filepath, String), "\nend")
+            Core.eval(Main, Expr(:(=), :GLOBAL_TEST_MOD, GLOBAL_TEST_MOD))
+            Core.eval(Main, Expr(:(=), :GLOBAL_TEST_FILENAME, GLOBAL_TEST_FILENAME))
+            @passobj 1 workers() GLOBAL_TEST_FILENAME
+            @passobj 1 workers() GLOBAL_TEST_MOD
+            @everywhere begin
+                tls = task_local_storage()
+                has_saved_source_path = haskey(tls, :SOURCE_PATH)
+                saved_source_path = has_saved_source_path ? tls[:SOURCE_PATH] : nothing
+                try
+                    # we are setting the thread-local `:SOURCE_PATH` for Julia's `include`
+                    # mechanism to work correctly. Otheriwse, the direct `include`s inside the
+                    # test file located at `filepath` won't work.
+                    if ispath(Main.GLOBAL_TEST_FILENAME)
+                        tls[:SOURCE_PATH] = Main.GLOBAL_TEST_FILENAME
+                    end
 
-                include_string(Main, Main.GLOBAL_TEST_MOD, Main.GLOBAL_TEST_FILENAME)
+                    include_string(Main, Main.GLOBAL_TEST_MOD, Main.GLOBAL_TEST_FILENAME)
 
-            finally
-                if has_saved_source_path
-                    tls[:SOURCE_PATH] = saved_source_path
-                else
-                    delete!(tls, :SOURCE_PATH)
+                finally
+                    if has_saved_source_path
+                        tls[:SOURCE_PATH] = saved_source_path
+                    else
+                        delete!(tls, :SOURCE_PATH)
+                    end
                 end
             end
         end
