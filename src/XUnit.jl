@@ -829,12 +829,44 @@ function runtests(filepath::String, args...)
                 m.include($filepath)
             end
         else
+            # make sure to pass the test-state to the worker processes (mostly for test filtering)
+            parent_thread_tls = task_local_storage()
+            has_xunit_state = haskey(parent_thread_tls, :__XUNIT_STATE__)
+            xunit_state = if has_xunit_state
+                xs = create_deep_copy(parent_thread_tls[:__XUNIT_STATE__])
+                empty!(xs.test_suites_stack)
+                empty!(xs.stack)
+                empty!(xs.seen)
+                xs
+            else
+                nothing
+            end
+            Core.eval(Main, Expr(:(=), :GLOBAL_HAS_XUNIT_STATE, has_xunit_state))
+            Core.eval(Main, Expr(:(=), :GLOBAL_XUNIT_STATE, xunit_state))
+            @passobj 1 workers() GLOBAL_HAS_XUNIT_STATE
+            @passobj 1 workers() GLOBAL_XUNIT_STATE
+
             # When we have several workers available, we'd prepare for `Distributed` execution
             # Even though, still, the underlying test-suite should explicitly request it via
             # the `runner=DistributedTestRunner()` keyword argument.
             XUnitModuleName = replace(string(gensym("XUnitModule")), "#" => "_")
             GLOBAL_TEST_FILENAME = filepath
-            GLOBAL_TEST_MOD = string("module ",XUnitModuleName, "; ",read(filepath, String), "\nend")
+            # everything is in a single line to correctly report the line numbers in
+            # `filepath` back to the user
+            GLOBAL_TEST_MOD = string(
+                "module ",XUnitModuleName, "; ",
+                "import XUnit; ",
+                "function __set_tls_xunit_state(); ",
+                "    xs = XUnit.create_deep_copy(Main.GLOBAL_XUNIT_STATE); ",
+                "    empty!(xs.test_suites_stack); ",
+                "    empty!(xs.stack); ",
+                "    empty!(xs.seen); ",
+                "    tls = task_local_storage(); ",
+                "    tls[:__XUNIT_STATE__] = xs; ",
+                "end; ",
+                "Main.GLOBAL_HAS_XUNIT_STATE && __set_tls_xunit_state(); ",
+                read(filepath, String),"\n",
+                "end")
             Core.eval(Main, Expr(:(=), :GLOBAL_TEST_MOD, GLOBAL_TEST_MOD))
             Core.eval(Main, Expr(:(=), :GLOBAL_TEST_FILENAME, GLOBAL_TEST_FILENAME))
             @passobj 1 workers() GLOBAL_TEST_FILENAME

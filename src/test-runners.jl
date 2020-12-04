@@ -101,7 +101,9 @@ function _run_testsuite(
         else
             # each worker processes the scheduled tests (in `SharedDistributedCode.do_work`)
             # The scheduled tests are assigned to a global variable on the worker processes
-            @assert !isdefined(Main, :__SCHEDULED_DISTRIBUTED_TESTS__) "Main.__SCHEDULED_DISTRIBUTED_TESTS__ IS defined on process $(myid())"
+            if isdefined(Main, :__SCHEDULED_DISTRIBUTED_TESTS__)
+                @warn "Main.__SCHEDULED_DISTRIBUTED_TESTS__ IS ALREADY defined on process $(myid())"
+            end
             Core.eval(Main, Expr(:(=), :__SCHEDULED_DISTRIBUTED_TESTS__, scheduled_tests))
 
             # returning `false` here means: tests have not been ran
@@ -462,25 +464,6 @@ function _run_scheduled_tests(
         $(read(joinpath(@__DIR__, "shared-distributed-code.jl"), String)),
         "shared-distributed-code.jl"
     )
-
-    # make sure to pass the test-state to the worker processes (mostly for test filtering)
-    parent_thread_tls = task_local_storage()
-    has_xunit_state = haskey(parent_thread_tls, :__XUNIT_STATE__)
-    xunit_state = if has_xunit_state
-        xs = create_deep_copy(parent_thread_tls[:__XUNIT_STATE__])
-        empty!(xs.test_suites_stack)
-        empty!(xs.stack)
-        empty!(xs.seen)
-        xs
-    else
-        nothing
-    end
-
-    Core.eval(Main, Expr(:(=), :GLOBAL_HAS_XUNIT_STATE, has_xunit_state))
-    Core.eval(Main, Expr(:(=), :GLOBAL_XUNIT_STATE, xunit_state))
-
-    @passobj 1 workers() GLOBAL_HAS_XUNIT_STATE
-    @passobj 1 workers() GLOBAL_XUNIT_STATE
 
     num_tests = length(scheduled_tests)
 

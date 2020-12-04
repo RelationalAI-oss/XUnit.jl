@@ -4,12 +4,17 @@ using Distributed
 using Test
 using ExceptionUnwrapping: has_wrapped_exception
 using XUnit
+using XUnit: create_deep_copy
 
 function do_work(jobs, results) # define work function everywhere
     try
         tls = task_local_storage()
         if Main.GLOBAL_HAS_XUNIT_STATE
-            tls[:__XUNIT_STATE__] = Main.GLOBAL_XUNIT_STATE
+            xs = create_deep_copy(Main.GLOBAL_XUNIT_STATE)
+            empty!(xs.test_suites_stack)
+            empty!(xs.stack)
+            empty!(xs.seen)
+            tls[:__XUNIT_STATE__] = xs
         end
         attempt_cnt = 1
         # we wait until either tests get scheduled (indicated by `Main.__SCHEDULED_DISTRIBUTED_TESTS__`)
@@ -54,7 +59,7 @@ function do_work(jobs, results) # define work function everywhere
                 if XUnit.TESTSET_PRINT_ENABLE[]
                     path = XUnit._get_path(vcat(st.parent_testsets, [st.target_testcase]))
                     std_io = IOBuffer()
-                    print(std_io, "-> Running ")
+                    print(std_io, "~> Running ")
                     printstyled(std_io, path; bold=true)
                     println(std_io, string(" test-case (on pid=", myid(), ")..."))
                     seekstart(std_io)
