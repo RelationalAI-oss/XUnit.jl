@@ -69,10 +69,10 @@ function do_work(jobs, results) # define work function everywhere
                     XUnit.DistributedAsyncTestMessage(st.target_testcase),
                     myid(),
                 ))
-            catch e
-                has_wrapped_exception(e, InterruptException) && rethrow()
+            catch err
+                has_wrapped_exception(err, InterruptException) && rethrow()
 
-                println("A critical error occued while running '$scheduled_test_name': ", e)
+                println("A critical error occued while running '$scheduled_test_name': ", err)
                 for s in stacktrace(catch_backtrace())
                     println(s)
                 end
@@ -85,7 +85,7 @@ function do_work(jobs, results) # define work function everywhere
                     Test.Error(
                         :nontest_error,
                         Expr(:tuple),
-                        e,
+                        err,
                         Base.catch_stack(),
                         st.target_testcase.source
                     )
@@ -99,10 +99,10 @@ function do_work(jobs, results) # define work function everywhere
             end
         end
         println("Process $(myid()) is done with handling task after running $(task_count) tasks (out of $(length(scheduled_tests)))")
-    catch e
-        has_wrapped_exception(e, InterruptException) && rethrow()
+    catch err
+        has_wrapped_exception(err, InterruptException) && rethrow()
 
-        println("A critical error occued in XUnit while running tests: ", e)
+        println("A critical error occued in XUnit while running tests: ", err)
         for s in stacktrace(catch_backtrace())
             println(s)
         end

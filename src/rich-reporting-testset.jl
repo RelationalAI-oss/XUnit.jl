@@ -68,8 +68,8 @@ function TestReports.display_reporting_testset(
         # Finish the top level testset, to mimick the output from Pkg.test()
         Test.pop_testset()
         finish(ts_default)
-    catch TestSetException
-        throw_on_error && rethrow()
+    catch err
+        (throw_on_error || has_wrapped_exception(err, InterruptException)) && rethrow()
         # Otherwise, don't want to error here if a test fails or errors, as we just want to
         # display the result and don't care about alerting the caller program about the
         # test failures. This way, we can make sure that printing the test results always

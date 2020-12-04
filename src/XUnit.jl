@@ -2,6 +2,8 @@ module XUnit
 
 using Base: @lock, ReentrantLock
 using Distributed #for DistributedTestRunner
+using ExceptionUnwrapping: has_wrapped_exception
+using EzXML
 import Test
 using Test: AbstractTestSet, Result, Fail, Broken, Pass, Error
 using Test: TESTSET_PRINT_ENABLE, get_testset_depth, get_testset
@@ -11,7 +13,6 @@ using TestReports: display_reporting_testset
 using Random
 using Base: Filesystem
 using Base.Threads
-using EzXML
 
 const Option{T} = Union{Nothing,T}
 
@@ -488,7 +489,7 @@ function run_testcase_inplace(testcase_obj)
             testcase_obj.test_fn()
         end
     catch err
-        err isa InterruptException && rethrow()
+        has_wrapped_exception(err, InterruptException) && rethrow()
         # something in the test block threw an error. Count that as an
         # error in this test set
         XUnit.record(ts, XUnit.Error(
@@ -576,7 +577,7 @@ function checked_testsuite_expr(
                                 end
                             end
                         catch err
-                            err isa InterruptException && rethrow()
+                            has_wrapped_exception(err, InterruptException) && rethrow()
                             # something in the test block threw an error. Count that as an
                             # error in this test set
                             XUnit.record(ts, XUnit.Error(

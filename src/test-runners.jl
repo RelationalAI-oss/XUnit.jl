@@ -326,7 +326,7 @@ function run_single_testcase(
             testsuite.after_each_hook()
         end
     catch err
-        err isa InterruptException && rethrow()
+        has_wrapped_exception(err, InterruptException) && rethrow()
         # something in the test block threw an error. Count that as an
         # error in this test set
         ts = sub_testcase.testset_report
@@ -372,13 +372,13 @@ macro async_with_error_log(message, expr)
     _async_with_error_log_expr(expr, message)
 end
 function _async_with_error_log_expr(expr, message="")
-    e = gensym("err")
+    err = gensym("err")
     return esc(quote
         $Base.Threads.@async try
             $(expr)
-        catch $e
-            $Base.@error "@async_with_error_log failed: $($message)" $e
-            $showerror(stderr, $e, $catch_backtrace())
+        catch $err
+            $Base.@error "@async_with_error_log failed: $($message)" $err
+            $showerror(stderr, $err, $catch_backtrace())
             rethrow()
         end
     end)
