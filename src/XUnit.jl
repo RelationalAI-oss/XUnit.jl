@@ -793,7 +793,7 @@ end
 
 # END Overloading Base.Test functions
 
-function runtests(fun::Function, depth::Int64=typemax(Int64), args...)
+function runtests_return_state(fun::Function, depth::Int64=typemax(Int64), args...)
     includes = []
     excludes = ["(?!)"]     # seed with an unsatisfiable regex
     for arg in args
@@ -806,10 +806,16 @@ function runtests(fun::Function, depth::Int64=typemax(Int64), args...)
     include = partial(join(map(x -> string("(?:", x, ")"), includes), "|"))
     exclude = exact(join(map(x -> string("(?:", x, ")"), excludes), "|"))
     state = XUnitState(depth, include, exclude)
+    local fn_res
     task_local_storage(:__XUNIT_STATE__, state) do
-        fun()
+        fn_res = fun()
     end
-    state
+    return (fn_res, state)
+end
+
+function runtests(fun::Function, depth::Int64=typemax(Int64), args...)
+    (fn_res, state) = runtests_return_state(fun, depth, args...)[1]
+    return fn_res
 end
 
 """

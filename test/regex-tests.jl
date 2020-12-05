@@ -61,7 +61,7 @@ function case(str::String, test::Function, depth::Int64,
         expected::Vector{String}, args...)
     println(str)
     println("======")
-    state = runtests(test, depth, args...)
+    (_, state) = XUnit.runtests_return_state(test, depth, args...)
     println()
     seen = sort(collect(keys(filter(kv -> kv.second, state.seen))))
     expected = sort(closure(expected))

@@ -262,59 +262,63 @@ end
     @test occursin("4 broken", tse_str)
 end
 
-@test XUnit.finish(XUnit.FallbackTestSet()) !== nothing
+@testset "test package" begin
 
-OLD_STDOUT = stdout
-OLD_STDERR = stderr
-catch_out = IOStream("")
-catch_err = IOStream("")
-rde, wre = redirect_stderr()
-rdo, wro = redirect_stdout()
+    @test XUnit.finish(XUnit.FallbackTestSet()) !== nothing
 
-try
+    OLD_STDOUT = stdout
+    OLD_STDERR = stderr
+    catch_out = IOStream("")
+    catch_err = IOStream("")
+    rde, wre = redirect_stderr()
+    rdo, wro = redirect_stdout()
 
-    # test that FallbackTestSet will throw immediately
-    cmd = `$(Base.julia_cmd()) --startup-file=no --depwarn=error test_exec.jl`
-    @test !success(pipeline(cmd))
+    try
 
-    @testset "no errors" begin
-        @test true
-        @test 1 == 1
-    end
+        # test that FallbackTestSet will throw immediately
+        cmd = `$(Base.julia_cmd()) --startup-file=no --depwarn=error test_exec.jl`
+        @test !success(pipeline(cmd))
 
-    # Test entirely empty test set
-    @testset "outer" begin
-        @testset "inner" begin
-        end
-    end
-
-    @testset "testset types" begin
-        ts = @testset "@testset should return the testset" begin
+        @testset "no errors" begin
             @test true
+            @test 1 == 1
         end
-        @test typeof(ts) == XUnit.AsyncTestSuite
-        passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = XUnit.get_test_counts(ts)
-        @test passes == 1
-        # TODO(MD): convert to for-loop testset when supported
-        test_results = @testset "@testset/for should return an array of testsets" begin
-            for i in 1:3
-                @testset "$i" begin
-                    @test true
-                end
+
+        # Test entirely empty test set
+        @testset "outer" begin
+            @testset "inner" begin
             end
         end
-        XUnit._finalize_reports(test_results)
-        tss = test_results.testset_report.reporting_test_set[].results
-        @test length(tss) == 3
-        @test typeof(tss[1]) == XUnit.RichReportingTestSet
-        passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = XUnit.get_test_counts(test_results)
-        @test c_passes == 3
-    end
 
-finally
-    redirect_stdout(OLD_STDOUT)
-    redirect_stderr(OLD_STDERR)
+        @testset "testset types" begin
+            ts = @testset "@testset should return the testset" begin
+                @test true
+            end
+            @test typeof(ts) == XUnit.AsyncTestSuite
+            passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = XUnit.get_test_counts(ts)
+            @test passes == 1
+            # TODO(MD): convert to for-loop testset when supported
+            test_results = @testset "@testset/for should return an array of testsets" begin
+                for i in 1:3
+                    @testset "$i" begin
+                        @test true
+                    end
+                end
+            end
+            XUnit._finalize_reports(test_results)
+            tss = test_results.testset_report.reporting_test_set[].results
+            @test length(tss) == 3
+            @test typeof(tss[1]) == XUnit.RichReportingTestSet
+            passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = XUnit.get_test_counts(test_results)
+            @test c_passes == 3
+        end
+
+    finally
+        redirect_stdout(OLD_STDOUT)
+        redirect_stderr(OLD_STDERR)
+    end
 end
+
 
 test_res = @testset "accounting" begin
     OLD_STDOUT = stdout
@@ -416,6 +420,8 @@ test_res = @testset "accounting" begin
     clear_test_reports!(ts)
 end
 
+XUnit.pop_testset()
+
 @test .1+.1+.1 ≈ .3
 @test .1+.1+.1 ≉ .4
 
@@ -434,7 +440,6 @@ test_results = @testset "@testset/for should return an array of testsets" begin
         end
     end
 end
-XUnit._finalize_reports(test_results)
 tss = test_results.testset_report.reporting_test_set[].results
 @test length(tss) == 3
 @test typeof(tss[1]) == XUnit.RichReportingTestSet
@@ -489,7 +494,6 @@ end
 # Do not use `@test` since the issue this is testing will swallow the error.
 # Same for the `@assert` in the for loop below
 @assert testset_depth17462 == XUnit.get_testset_depth()
-XUnit._finalize_reports(tss17462_results)
 tss17462 = tss17462_results.testset_report.reporting_test_set[].results
 @assert length(tss17462) == 3
 for ts17462 in tss17462
@@ -509,10 +513,6 @@ catch
     nothing # Shouldn't get here
 end
 @test ts isa XUnit.AsyncTestSuite
-
-# now we're done running tests with AsyncTestSuite so we can go back to stdout
-redirect_stdout(OLD_STDOUT)
-redirect_stderr(OLD_STDERR)
 
 # import the methods needed for defining our own testset type
 import Test: record, finish
@@ -587,8 +587,8 @@ ts = async_ts.testset_report
 # test custom testset types on testset/for
 tss_results = @testset CustomTestSet foo=3 "custom testset" begin
     for i in 1:6
-        @testset "$i" begin
-            @testset "inner testset $i-$j" begin
+        @testset foo=4 "$i" begin
+            @testset "inner testset $i" begin
                 for j in 1:3
                     @testset "$j" begin
                         @test iseven(i + j)
@@ -603,18 +603,21 @@ tss_results = @testset CustomTestSet foo=3 "custom testset" begin
     end
 end
 
-XUnit._finalize_reports(tss_results)
 tss = tss_results.testset_report.results
+@test tss_results.testset_report.foo == 3
 for i in 1:6
     @test typeof(tss[i]) == CustomTestSet
-    @test tss[i].foo == 3
+    @test tss[i].foo == 4
+    @test length(tss[1].results) == 2
+    @test typeof(tss[1].results[1]) == CustomTestSet
     for j in 1:3
-        @test typeof(tss[i].results[j]) == CustomTestSet
-        @test tss[i].results[j].foo == 1
-        @test typeof(tss[i].results[j].results[1]) == (iseven(i+j) ? Pass : Fail)
+        @test typeof(tss[i].results[1].results[j]) == CustomTestSet
+        @test tss[i].results[1].results[j].foo == 1
+        @test typeof(tss[i].results[1].results[j].results[1]) == (iseven(i+j) ? Pass : Fail)
     end
-    @test typeof(tss[i].results[4]) == CustomTestSet
-    @test typeof(tss[i].results[4].results[1]) == (iseven(i) ? Pass : Fail)
+    @test typeof(tss[1].results[2]) == CustomTestSet
+    @test typeof(tss[i].results[2]) == CustomTestSet
+    @test typeof(tss[i].results[2].results[1]) == (iseven(i) ? Pass : Fail)
 end
 
 # test @inferred
