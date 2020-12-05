@@ -295,14 +295,20 @@ try
         @test typeof(ts) == XUnit.AsyncTestSuite
         passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = XUnit.get_test_counts(ts)
         @test passes == 1
-        # TODO(MD): Not supported yet
-        # tss = @testset "@testset/for should return an array of testsets: $i" for i in 1:3
-        #     @test true
-        # end
-        # @test length(tss) == 3
-        # @test typeof(tss[1]) == XUnit.AsyncTestSuite
-        # passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = XUnit.get_test_counts(tss[1])
-        # @test passes == 1
+        # TODO(MD): convert to for-loop testset when supported
+        test_results = @testset "@testset/for should return an array of testsets" begin
+            for i in 1:3
+                @testset "$i" begin
+                    @test true
+                end
+            end
+        end
+        XUnit._finalize_reports(test_results)
+        tss = test_results.testset_report.reporting_test_set[].results
+        @test length(tss) == 3
+        @test typeof(tss[1]) == XUnit.RichReportingTestSet
+        passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = XUnit.get_test_counts(test_results)
+        @test c_passes == 3
     end
 
 finally
@@ -351,30 +357,44 @@ test_res = @testset "accounting" begin
                 @test 1 == 1 # this test will not be run
             end
 
-            # TODO(MD): Not supported yet
-            # @testset "loop with desc" begin
-            #     @testset "loop1 $T" for T in (Float32, Float64)
-            #         @test 1 == T(1)
-            #     end
-            # end
-            # @testset "loops without desc" begin
-            #     @testset for T in (Float32, Float64)
-            #         @test 1 == T(1)
-            #     end
-            #     @testset for T in (Float32, Float64), S in (Int32,Int64)
-            #         @test S(1) == T(1)
-            #     end
-            # end
-            # @testset "some loops fail" begin
-            #     @testset for i in 1:5
-            #         @test i <= 4
-            #     end
-            #     # should add 3 errors and 3 passing tests
-            #     @testset for i in 1:6
-            #         iseven(i) || error("error outside of test")
-            #         @test true # only gets run if the above passed
-            #     end
-            # end
+            # TODO(MD): convert to for-loop testset when supported
+            @testset "loop with desc" begin
+                @testset "loop1" begin
+                    for T in (Float32, Float64)
+                        @testset "loop1 $T" begin
+                            @test 1 == T(1)
+                        end
+                    end
+                end
+            end
+            # TODO(MD): convert to for-loop testset when supported
+            @testset "loops without desc" begin
+                for T in (Float32, Float64)
+                    @testset "$T" begin
+                        @test 1 == T(1)
+                    end
+                end
+                for T in (Float32, Float64), S in (Int32,Int64)
+                    @testset "$T" begin
+                        @test S(1) == T(1)
+                    end
+                end
+            end
+            # TODO(MD): convert to for-loop testset when supported
+            @testset "some loops fail" begin
+                for i in 1:5
+                    @testset "$i" begin
+                        @test i <= 4
+                    end
+                end
+                # should add 3 errors and 3 passing tests
+                for i in 1:6
+                    @testset "$i" begin
+                        iseven(i) || error("error outside of test")
+                        @test true # only gets run if the above passed
+                    end
+                end
+            end
         end
         XUnit._finalize_reports(ts)
         passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = XUnit.get_test_counts(ts)
@@ -388,9 +408,9 @@ test_res = @testset "accounting" begin
         total_fail   = fails  + c_fails
         total_error  = errors + c_errors
         total_broken = broken + c_broken
-        @test total_pass   == 9 # 24 if all commented tests are enabled
-        @test total_fail   == 5 # 6 if all commented tests are enabled
-        @test total_error  == 3 # 6 if all commented tests are enabled
+        @test total_pass   == 24
+        @test total_fail   == 6
+        @test total_error  == 6
         @test total_broken == 0
     end
     clear_test_reports!(ts)
@@ -406,60 +426,77 @@ end
 passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = XUnit.get_test_counts(ts)
 @test passes == 1
 
-# TODO(MD): Not supported yet
-# tss = @testset "@testset/for should return an array of testsets: $i" for i in 1:3
-#     @test true
-# end
-# @test length(tss) == 3
-# @test typeof(tss[1]) == XUnit.AsyncTestSuite
-# @test tss[1].n_passed == 1
+# TODO(MD): convert to for-loop testset when supported
+test_results = @testset "@testset/for should return an array of testsets" begin
+    for i in 1:3
+        @testset "$i" begin
+            @test true
+        end
+    end
+end
+XUnit._finalize_reports(test_results)
+tss = test_results.testset_report.reporting_test_set[].results
+@test length(tss) == 3
+@test typeof(tss[1]) == XUnit.RichReportingTestSet
+passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = XUnit.get_test_counts(test_results)
+@test c_passes == 3
 
-# TODO(MD): Not supported yet
-# # Issue #17908 (return)
-# testset_depth17908 = XUnit.get_testset_depth()
-# @testset for i in 1:3
-#     i > 1 && return
-#     @test i == 1
-# end
-# # The return aborts the control flow so the expression above doesn't return a
-# # value. The only thing we can test is whether the testset is properly popped.
-# # Do not use `@test` since the issue this is testing will swallow the error.
-# @assert testset_depth17908 == XUnit.get_testset_depth()
+# TODO(MD): convert to for-loop testset when supported
+# Issue #17908 (return)
+testset_depth17908 = XUnit.get_testset_depth()
+@testset "return" begin
+    for i in 1:3
+        @testset "$i" begin
+            i > 1 && return
+            @test i == 1
+        end
+    end
+end
+# The return aborts the control flow so the expression above doesn't return a
+# value. The only thing we can test is whether the testset is properly popped.
+# Do not use `@test` since the issue this is testing will swallow the error.
+@assert testset_depth17908 == XUnit.get_testset_depth()
 
-# TODO(MD): Not supported yet
-# # Issue #17462 and Issue #17908 (break, continue)
-# testset_depth17462 = XUnit.get_testset_depth()
-# counter_17462_pre = 0
-# counter_17462_post = 0
-# tss17462 = @testset for x in [1,2,3,4]
-#     global counter_17462_pre, counter_17462_post
-#     counter_17462_pre += 1
-#     if x == 1
-#         @test counter_17462_pre == x
-#         continue
-#         @test false
-#     elseif x == 3
-#         @test counter_17462_pre == x
-#         break
-#         @test false
-#     elseif x == 4
-#         @test false
-#     else
-#         @test counter_17462_pre == x
-#         @test x == 2
-#         @test counter_17462_post == 0
-#     end
-#     counter_17462_post += 1
-# end
-# # Do not use `@test` since the issue this is testing will swallow the error.
-# # Same for the `@assert` in the for loop below
-# @assert testset_depth17462 == XUnit.get_testset_depth()
-# @assert length(tss17462) == 3
-# for ts17462 in tss17462
-#     @assert isa(ts17462, XUnit.AsyncTestSuite)
-# end
-# @test counter_17462_pre == 3
-# @test counter_17462_post == 1
+# TODO(MD): convert to for-loop testset when supported
+# Issue #17462 and Issue #17908 (break, continue)
+testset_depth17462 = XUnit.get_testset_depth()
+counter_17462_pre = 0
+counter_17462_post = 0
+tss17462_results = @testset "break-continue" begin
+    for x in [1,2,3,4]
+        @testset "$x" begin
+            global counter_17462_pre, counter_17462_post
+            counter_17462_pre += 1
+            if x == 1
+                @test counter_17462_pre == x
+                continue
+                @test false
+            elseif x == 3
+                @test counter_17462_pre == x
+                break
+                @test false
+            elseif x == 4
+                @test false
+            else
+                @test counter_17462_pre == x
+                @test x == 2
+                @test counter_17462_post == 0
+            end
+            counter_17462_post += 1
+        end
+    end
+end
+# Do not use `@test` since the issue this is testing will swallow the error.
+# Same for the `@assert` in the for loop below
+@assert testset_depth17462 == XUnit.get_testset_depth()
+XUnit._finalize_reports(tss17462_results)
+tss17462 = tss17462_results.testset_report.reporting_test_set[].results
+@assert length(tss17462) == 3
+for ts17462 in tss17462
+    @assert isa(ts17462, XUnit.RichReportingTestSet)
+end
+@test counter_17462_pre == 3
+@test counter_17462_post == 1
 
 # Issue #21008
 ts = try
@@ -498,7 +535,6 @@ function finish(ts::CustomTestSet)
     end
     ts
 end
-@show "-----------------------"
 async_ts = @testset CustomTestSet "Testing custom testsets" begin
     # this testset should inherit the parent testset type
     @testset "custom testset inner 1" begin
@@ -547,28 +583,39 @@ ts = async_ts.testset_report
 @test typeof(ts.results[2].results[2]) == CustomTestSet
 @test ts.results[2].results[2].foo == 3
 
-# TODO(MD): Not supported yet
-# # test custom testset types on testset/for
-# tss = @testset CustomTestSet foo=3 "custom testset $i" for i in 1:6
-#     @testset "inner testset $i-$j" for j in 1:3
-#         @test iseven(i + j)
-#     end
-#     # make sure a testset within a testset/for works
-#     @testset "inner testset $i" begin
-#         @test iseven(i)
-#     end
-# end
-# for i in 1:6
-#     @test typeof(tss[i]) == CustomTestSet
-#     @test tss[i].foo == 3
-#     for j in 1:3
-#         @test typeof(tss[i].results[j]) == CustomTestSet
-#         @test tss[i].results[j].foo == 1
-#         @test typeof(tss[i].results[j].results[1]) == (iseven(i+j) ? Pass : Fail)
-#     end
-#     @test typeof(tss[i].results[4]) == CustomTestSet
-#     @test typeof(tss[i].results[4].results[1]) == (iseven(i) ? Pass : Fail)
-# end
+# TODO(MD): convert to for-loop testset when supported
+# test custom testset types on testset/for
+tss_results = @testset CustomTestSet foo=3 "custom testset" begin
+    for i in 1:6
+        @testset "$i" begin
+            @testset "inner testset $i-$j" begin
+                for j in 1:3
+                    @testset "$j" begin
+                        @test iseven(i + j)
+                    end
+                end
+            end
+            # make sure a testset within a testset/for works
+            @testset "inner testset $i" begin
+                @test iseven(i)
+            end
+        end
+    end
+end
+
+XUnit._finalize_reports(tss_results)
+tss = tss_results.testset_report.results
+for i in 1:6
+    @test typeof(tss[i]) == CustomTestSet
+    @test tss[i].foo == 3
+    for j in 1:3
+        @test typeof(tss[i].results[j]) == CustomTestSet
+        @test tss[i].results[j].foo == 1
+        @test typeof(tss[i].results[j].results[1]) == (iseven(i+j) ? Pass : Fail)
+    end
+    @test typeof(tss[i].results[4]) == CustomTestSet
+    @test typeof(tss[i].results[4].results[1]) == (iseven(i) ? Pass : Fail)
+end
 
 # test @inferred
 uninferrable_function(i) = (1, "1")[i]
@@ -611,9 +658,14 @@ uninferrable_kwtest(x; y=1) = 2x+y
 @test (@inferred uninferrable_kwtest(1)) == 3
 @test (@inferred uninferrable_kwtest(1; y=2)) == 4
 
-# TODO(MD): Not supported yet
-# @test_throws ErrorException @testset "$(error())" for i in 1:10
-# end
+# TODO(MD): convert to for-loop testset when supported
+@test_throws ErrorException @testset "$(error())" begin
+    for i in 1:10
+        @testset "$i" begin
+            @test true
+        end
+    end
+end
 @test_throws ErrorException @testset "$(error())" begin
 end
 
@@ -804,10 +856,14 @@ end
         # global RNG must re-seeded at the beginning of @testset
         @test a == rand()
     end
-    # TODO(MD): Not supported yet
-    # @testset for i=1:3
-    #     @test a == rand()
-    # end
+    # TODO(MD): convert to for-loop testset when supported
+    @testset "rand-loop" begin
+        for i=1:3
+            @testset "$i" begin
+                @test a == rand()
+            end
+        end
+    end
     # the @testset's above must have no consequence for rand() below
     b = rand()
     Random.seed!(seed)
