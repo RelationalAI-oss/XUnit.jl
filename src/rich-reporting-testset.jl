@@ -29,12 +29,10 @@ function RichReportingTestSet(
 end
 
 function Test.record(rich_ts::RichReportingTestSet, child::AbstractTestSet)
-    Test.record(rich_ts.reporting_test_set[], child)
-    return rich_ts
+    return Test.record(rich_ts.reporting_test_set[], child)
 end
 function Test.record(rich_ts::RichReportingTestSet, res::Result)
-    Test.record(rich_ts.reporting_test_set[], res)
-    return rich_ts
+    return Test.record(rich_ts.reporting_test_set[], res)
 end
 function Test.finish(rich_ts::RichReportingTestSet)
     # If we are a nested test set, do not print a full summary
@@ -48,25 +46,30 @@ function Test.finish(rich_ts::RichReportingTestSet)
     return rich_ts
 end
 
-function TestReports.add_to_ts_default!(ts_default::Test.DefaultTestSet, rich_ts::RichReportingTestSet)
+function TestReports.add_to_ts_default!(
+    ts_default::Test.DefaultTestSet, rich_ts::RichReportingTestSet
+)
     ts = rich_ts.reporting_test_set[]
-    sub_ts = Test.DefaultTestSet(rich_ts.description)
+    sub_ts = Test.DefaultTestSet(get_description(rich_ts))
     TestReports.add_to_ts_default!.(Ref(sub_ts), ts.results)
     push!(ts_default.results, sub_ts)
+end
+
+function TestReports.display_reporting_testset(
+    ts::AbstractTestSet;
+    throw_on_error::Bool = true,
+)
+    # show(ts)
+    return nothing
 end
 
 function TestReports.display_reporting_testset(
     rich_ts::RichReportingTestSet;
     throw_on_error::Bool = true,
 )
-    ts = rich_ts.reporting_test_set[]
-    # Create top level default testset to hold all results
-    ts_default = DefaultTestSet(rich_ts.description)
-    Test.push_testset(ts_default)
-    TestReports.add_to_ts_default!.(Ref(ts_default), ts.results)
+    ts_default = convert_to_default_testset(rich_ts)
     try
         # Finish the top level testset, to mimick the output from Pkg.test()
-        Test.pop_testset()
         finish(ts_default)
     catch err
         (throw_on_error || has_wrapped_exception(err, InterruptException)) && rethrow()
@@ -76,6 +79,31 @@ function TestReports.display_reporting_testset(
         # happens completely, regardless of the tests having and error/failure or not.
     end
     return nothing
+end
+
+function Test.get_test_counts(ts::Union{RichReportingTestSet, AsyncTestSuiteOrTestCase})
+    return Test.get_test_counts(convert_to_default_testset(ts))
+end
+
+function convert_to_default_testset(ts::AsyncTestSuiteOrTestCase)
+    return convert_to_default_testset(ts.testset_report)
+end
+function convert_to_default_testset(rich_ts::RichReportingTestSet)::DefaultTestSet
+    ts = rich_ts.reporting_test_set[]
+    return _convert_to_default_testset(get_description(rich_ts), ts.results)
+end
+
+function _convert_to_default_testset(description, results)::DefaultTestSet
+    # Create top level default testset to hold all results
+    ts_default = DefaultTestSet(description)
+    Test.push_testset(ts_default)
+    TestReports.add_to_ts_default!.(Ref(ts_default), results)
+    Test.pop_testset()
+    return ts_default
+end
+
+function XUnit.convert_to_default_testset(ts::AbstractTestSet)
+    return _convert_to_default_testset(get_description(ts), ts.results)
 end
 
 function test_out_io()
@@ -146,7 +174,7 @@ function create_deep_copy(ts::RichReportingTestSet)::RichReportingTestSet
     RichReportingTestSet(
         create_deep_copy(ts.reporting_test_set[]),
         create_deep_copy(ts.flattened_reporting_test_set[]),
-        ts.description,
+        get_description(ts),
         ts.xml_output,
         ts.html_output,
         copy(ts.out_buff),
@@ -156,7 +184,7 @@ end
 
 function create_deep_copy(ts::ReportingTestSet)::ReportingTestSet
     return ReportingTestSet(
-        ts.description,
+        get_description(ts),
         map(create_deep_copy, ts.results),
         copy(ts.properties)
     )
@@ -197,7 +225,7 @@ function _flatten_results!(rich_ts::RichReportingTestSet)::Vector{<:AbstractTest
     function inner!(childts::AbstractTestSet)
         # Make it a sibling
         TestReports.update_testset_properties!(childts, ts)
-        childts.description = rich_ts.description * "/" * childts.description
+        childts.description = get_description(rich_ts) * "/" * get_description(childts)
         push!(flattened_results, childts)
     end
 

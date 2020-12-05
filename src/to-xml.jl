@@ -134,7 +134,7 @@ function TestReports.report(ts_rich::RichReportingTestSet)
 
     xdoc = XMLDocument()
     root = setroot!(xdoc, testsuites_xml(
-        ts_rich.description,
+        get_description(ts_rich),
         "_id_",
         total_ntests,
         total_nfails,
@@ -163,12 +163,12 @@ function to_xml(ts_rich::RichReportingTestSet)
         total_ntests += ntests
         total_nfails += nfails
         total_nerrors += nerrors
-        set_attribute!(x_testcase, "classname", ts.description)
+        set_attribute!(x_testcase, "classname", get_description(ts))
         result isa Pass && set_attribute!(x_testcase, "name", x_testcase["name"] * " (Test $total_ntests)")
         x_testcase
     end
 
-    x_testsuite = testsuite_xml(ts_rich.description, "_id_", total_ntests, total_nfails, total_nerrors, x_testcases)
+    x_testsuite = testsuite_xml(get_description(ts_rich), "_id_", total_ntests, total_nfails, total_nerrors, x_testcases)
     ts isa ReportingTestSet && add_testsuite_properties!(x_testsuite, ts)
 
     include_test_outputs(ts_rich, x_testsuite)

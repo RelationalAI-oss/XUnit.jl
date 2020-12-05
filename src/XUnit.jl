@@ -5,8 +5,8 @@ using Distributed #for DistributedTestRunner
 using ExceptionUnwrapping: has_wrapped_exception
 using EzXML
 import Test
-using Test: AbstractTestSet, Result, Fail, Broken, Pass, Error
-using Test: TESTSET_PRINT_ENABLE, get_testset_depth, get_testset
+using Test: AbstractTestSet, Result, Fail, Broken, Pass, Error, guardseed
+using Test: TESTSET_PRINT_ENABLE, get_testset_depth, get_testset, get_test_counts
 using Test: _check_testset, parse_testset_args, push_testset, pop_testset
 using TestReports
 using TestReports: display_reporting_testset
@@ -163,7 +163,7 @@ include("test-metrics.jl")
 
 function clear_test_reports!(testsuite::AsyncTestSuite)
     rich_ts = testsuite.testset_report
-    rich_ts.reporting_test_set[] = ReportingTestSet(rich_ts.description)
+    rich_ts.reporting_test_set[] = ReportingTestSet(get_description(rich_ts))
 
     clear_test_reports!.(testsuite.sub_testsuites)
     clear_test_reports!.(testsuite.sub_testcases)
@@ -173,7 +173,7 @@ function clear_test_reports!(testcase::AsyncTestCase)
     rich_ts = testcase.testset_report
     clear_test_reports!.(testsuite.sub_testsuites)
     clear_test_reports!.(testsuite.sub_testcases)
-    rich_ts.reporting_test_set[] = ReportingTestSet(rich_ts.description)
+    rich_ts.reporting_test_set[] = ReportingTestSet(get_description(rich_ts))
 end
 
 const TEST_SUITE_PARAMETER_NAMES = (
@@ -508,7 +508,7 @@ end
 #   - if it IS NOT enclosed inside another `@testcase`, then it schedules it for running later
 #   - if it IS enclosed inside another `@testcase`, runs its body
 function checked_testsuite_expr(
-    name::Expr, ts_expr::Expr, source, hook_fn_options; is_testcase::Bool = false
+    name::Union{Expr,String}, ts_expr::Expr, source, hook_fn_options; is_testcase::Bool = false
 )
     quote
         ts = get_testset()
@@ -780,7 +780,7 @@ end
 
 function Test.record(ts::Test.DefaultTestSet, t::Fail)
     if Test.myid() == 1
-        printstyled(ts.description, ": ", color=:white)
+        printstyled(get_description(ts), ": ", color=:white)
         # don't print for interrupted tests
         if t.test_type !== :test_interrupted
             print(t)
@@ -935,6 +935,23 @@ function runtests(depth::Int, args...)
     runtests(testfile, depth, args...)
 end
 
+"""
+    get_description(ts::AsyncTestSuiteOrTestCase)
+    get_description(ts::AbstractTestSet)
+    get_description(ts::ScheduledTest)
+
+Returns a description of the given XUnit object
+"""
+function get_description end
+get_description(ts::AsyncTestSuiteOrTestCase) = get_description(ts.testset_report)
+get_description(ts::RichReportingTestSet) = ts.description
+get_description(ts::ReportingTestSet) = ts.description
+get_description(ts::Test.DefaultTestSet) = ts.description
+get_description(ts::ScheduledTest) = get_description(ts.target_testcase)
+function get_description(ts::T) where T <: AbstractTestSet
+    return hasfield(T, :description) ? ts.description : "$T"
+end
+
 export RichReportingTestSet, html_output, html_report, xml_output, xml_report
 export clear_test_reports!, test_out_io, test_err_io, test_print, test_println
 
@@ -949,9 +966,9 @@ using Test: @test, @test_throws, @test_broken, @test_skip,
 using Test: @inferred
 using Test: detect_ambiguities, detect_unbound_args
 using Test: GenericString, GenericSet, GenericDict, GenericArray
-using Test: TestSetException
+using Test: TestSetException, LogTestFailure
 using Test: get_testset, get_testset_depth
-using Test: DefaultTestSet, record, finish
+using Test: DefaultTestSet, FallbackTestSet, FallbackTestSetException, record, finish
 
 export @test, @test_throws, @test_broken, @test_skip,
     @test_warn, @test_nowarn, @test_logs, @test_deprecated,
@@ -960,7 +977,7 @@ export @inferred
 export detect_ambiguities, detect_unbound_args
 export GenericString, GenericSet, GenericDict, GenericArray
 export TestSetException
-export get_testset, get_testset_depth, run_testsuite
+export get_description, get_testset, get_testset_depth, run_testsuite
 export AbstractTestSet, DefaultTestSet, record, finish
 export TestRunner
 export SequentialTestRunner, ShuffledTestRunner, ParallelTestRunner, DistributedTestRunner

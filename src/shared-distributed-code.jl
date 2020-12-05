@@ -45,12 +45,12 @@ function do_work(jobs, results) # define work function everywhere
 
             st = scheduled_tests[scheduled_tests_index]
             try
-                if st.target_testcase.testset_report.description != scheduled_test_name
+                if get_description(st) != scheduled_test_name
                     println("A critical test scheduling error:")
-                    println("  st.target_testcase.testset_report.description (\"$(st.target_testcase.testset_report.description)\") != scheduled_test_name (\"$(scheduled_test_name)\")")
+                    println("  get_description(st) (\"$(get_description(st))\") != scheduled_test_name (\"$(scheduled_test_name)\")")
                     println("List of scheduled tests on worker #$(myid()):")
                     for (i, tst) in enumerate(scheduled_tests)
-                        println("$i ==> $(tst.target_testcase.testset_report.description)")
+                        println("$i ==> $(get_description(tst))")
                     end
                     put!(jobs, (scheduled_tests_index, scheduled_test_name))
                     break
@@ -85,9 +85,9 @@ function do_work(jobs, results) # define work function everywhere
                 # something in the test block threw an error. Count that as an
                 # error in this test set
                 ts = st.target_testcase.testset_report.reporting_test_set[]
-                Test.record(
+                XUnit.record(
                     ts,
-                    Test.Error(
+                    XUnit.Error(
                         :nontest_error,
                         Expr(:tuple),
                         err,

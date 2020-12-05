@@ -296,7 +296,7 @@ function run_single_testcase(
     empty!(rs.stack)
     for testsuite in parents_with_this
         ts = testsuite.testset_report
-        push!(rs.stack, ts.description)
+        push!(rs.stack, get_description(ts))
         push!(rs.test_suites_stack, testsuite)
         Test.push_testset(ts)
     end
@@ -332,7 +332,7 @@ function run_single_testcase(
         # something in the test block threw an error. Count that as an
         # error in this test set
         ts = sub_testcase.testset_report
-        Test.record(ts, Test.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), sub_testcase.source))
+        XUnit.record(ts, Test.Error(:nontest_error, Expr(:tuple), err, Base.catch_stack(), sub_testcase.source))
     finally
         copy!(RNG, oldrng)
         for ts in parents_with_this
@@ -353,7 +353,7 @@ function run_single_testcase(
 end
 
 function _get_path(testsuite_stack)
-    join(map(testsuite -> testsuite.testset_report.description, testsuite_stack), "/")
+    join(map(testsuite -> get_description(testsuite), testsuite_stack), "/")
 end
 
 """
@@ -495,8 +495,8 @@ function _run_scheduled_tests(
         try
             println("List of scheduled tests on master:")
             for (i, tst) in enumerate(scheduled_tests)
-                put!(jobs, (i, tst.target_testcase.testset_report.description))
-                println("$i => $(tst.target_testcase.testset_report.description)")
+                put!(jobs, (i, get_description(tst)))
+                println("$i => $(get_description(tst))")
                 last_i = i
             end
         finally
@@ -568,7 +568,7 @@ function _run_scheduled_tests(
                 if !ishandled
                     orig_test_case = scheduled_tests[job_id].target_testcase
                     ts = orig_test_case.testset_report.reporting_test_set[]
-                    Test.record(ts, Test.Error(
+                    XUnit.record(ts, Test.Error(
                         :nontest_error,
                         Expr(:tuple),
                         "An error occurred in the worker test-runner process.",
