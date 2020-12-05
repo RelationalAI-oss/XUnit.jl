@@ -72,7 +72,7 @@ end
 case(str::String, test::Function, expected::Vector{String}, args...) =
     case(str, test, typemax(Int64), expected, args...)
 
-@testset "XUnit" begin
+@testset "XUnit Filter" begin
     case("Run all tests", test,
         [ "t/a/1", "t/a/2", "t/a/3",
           "t/b/1", "t/b/2", "t/b/3",
