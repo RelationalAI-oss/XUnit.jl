@@ -1,4 +1,5 @@
 using XUnit
+using Distributed
 
 include(joinpath(@__DIR__, "subdir2/subdir2-macrodef.jl"))
 
@@ -16,13 +17,18 @@ extra_param_value = "extra_p"
 before_each_fn_gen(fn_name, extra_param=extra_param_value) = () -> println("         >>>> before_each -> $fn_name, $extra_param, $global_param")
 after_each_fn_gen(fn_name, extra_param=extra_param_value) = () -> println("         >>>> after_each -> $fn_name, $extra_param, $global_param")
 
-XUnit.TESTSET_PRINT_ENABLE[] = true
-println("Running tests with $(Threads.nthreads()) threads")
+println("Running tests with $(nworkers()) processes and $(Threads.nthreads()) threads")
 
 topname = "ABC"
 bottomname = "XYZ"
 
-@testsuite "Top XParent $topname" metrics=SubModule.MyTestMetrics runner=DistributedTestRunner() html_report=true success_handler=(testsuite) -> run(`open ./$(html_output(testsuite))`) failure_handler=(testsuite) -> run(`open ./$(html_output(testsuite))`) begin
+function set_results_to_main(testsuite)
+    # Set Main.XUNIT_UNITTEST_RESULTS to communicate the results back to the test-runner
+    Core.eval(Main, Expr(:(=), :XUNIT_UNITTEST_RESULTS, testsuite))
+    # run(`open ./$(html_output(testsuite))`)
+end
+
+@testsuite "Top XParent $topname" metrics=SubModule.MyTestMetrics runner=DistributedTestRunner() html_report=true success_handler=set_results_to_main failure_handler=set_results_to_main begin
     @testset "XTest 1" before_each=before_each_fn_gen("Child XTest 1") begin
         @testcase "Child XTest 1 $bottomname" begin
             @test 1 == 1
@@ -157,5 +163,3 @@ bottomname = "XYZ"
     end
     include("subdir1/subdir1-unittest.jl")
 end
-
-nothing

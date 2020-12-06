@@ -9,8 +9,8 @@ module SubModule
         return MyTestMetrics(XUnit.DefaultTestMetrics())
     end
 
-    function XUnit.gather_test_metrics(fn::Function, ts::XUnit.AbstractTestSet, m::MyTestMetrics)
-        return XUnit.gather_test_metrics(fn, ts, m.default)
+    function XUnit.run_and_gather_test_metrics(fn::Function, ts::XUnit.AbstractTestSet, m::MyTestMetrics; run::Bool=true)
+        return XUnit.run_and_gather_test_metrics(fn, ts, m.default; run=run)
     end
 
     function XUnit.combine_test_metrics(parent::MyTestMetrics, sub::MyTestMetrics)

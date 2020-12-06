@@ -36,18 +36,17 @@ function run_testsuite(
         testsuite.html_report && html_report(testsuite)
 
         if throw_on_error
-            _swallow_all_outputs() do # test results are already printed. Let's avoid printing the errors twice.
-                prev_TESTSET_PRINT_ENABLE = TESTSET_PRINT_ENABLE[]
-                TESTSET_PRINT_ENABLE[] = false
-                try
-                    # throw an exception is any test failed or errored
+            prev_TESTSET_PRINT_ENABLE = TESTSET_PRINT_ENABLE[]
+            TESTSET_PRINT_ENABLE[] = false
+            try
+                _swallow_all_outputs() do # test results are already printed. Let's avoid printing the errors twice.
                     display_reporting_testset(testsuite; throw_on_error=true)
-                catch
-                    testsuite.failure_handler(testsuite)
-                    rethrow()
-                finally
-                    TESTSET_PRINT_ENABLE[] = prev_TESTSET_PRINT_ENABLE
                 end
+            catch e
+                testsuite.failure_handler(testsuite)
+                rethrow()
+            finally
+                TESTSET_PRINT_ENABLE[] = prev_TESTSET_PRINT_ENABLE
             end
         end
 

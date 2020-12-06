@@ -15,3 +15,10 @@ TestReports = "dcd651b4-b50a-5b6b-8f22-87e9f253a252"
 ExceptionUnwrapping = "0.1"
 EzXML = "1"
 TestReports = "0.4"
+
+[extras]
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+
+[targets]
+test = ["Pkg", "Logging"]
