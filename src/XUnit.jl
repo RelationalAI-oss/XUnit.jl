@@ -814,7 +814,7 @@ function runtests_return_state(fun::Function, depth::Int64=typemax(Int64), args.
 end
 
 function runtests(fun::Function, depth::Int64=typemax(Int64), args...)
-    (fn_res, state) = runtests_return_state(fun, depth, args...)[1]
+    (fn_res, state) = runtests_return_state(fun, depth, args...)
     return fn_res
 end
 
