@@ -22,7 +22,9 @@ function run_unittests()
     @testsuite "unittests tests" begin
         @test isdefined(Main, :XUNIT_UNITTEST_RESULTS)
 
-        test_results = Main.XUNIT_UNITTEST_RESULTS
+        test_results = Main.XUNIT_UNITTEST_RESULTS[]
+
+        @test test_results !== nothing
 
         @test test_results isa XUnit.AsyncTestSuite
 

@@ -23,8 +23,9 @@ topname = "ABC"
 bottomname = "XYZ"
 
 function set_results_to_main(testsuite)
-    # Set Main.XUNIT_UNITTEST_RESULTS to communicate the results back to the test-runner
-    Core.eval(Main, Expr(:(=), :XUNIT_UNITTEST_RESULTS, testsuite))
+    # Set Main.XUNIT_UNITTEST_RESULTS[] to communicate the results back to the test-runner
+    @info "Setting Main.XUNIT_UNITTEST_RESULTS[] to '$(XUnit.get_description(testsuite))'"
+    Main.XUNIT_UNITTEST_RESULTS[] = testsuite
     # run(`open ./$(html_output(testsuite))`)
 end
 

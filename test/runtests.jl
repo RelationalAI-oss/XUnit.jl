@@ -1,3 +1,5 @@
+const XUNIT_UNITTEST_RESULTS = Ref{Any}(nothing)
+
 module XUnitTests
 
 using Distributed
