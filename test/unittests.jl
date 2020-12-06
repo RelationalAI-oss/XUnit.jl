@@ -26,10 +26,11 @@ function set_results_to_main(testsuite)
     # Set Main.XUNIT_UNITTEST_RESULTS[] to communicate the results back to the test-runner
     @info "Setting Main.XUNIT_UNITTEST_RESULTS[] to '$(XUnit.get_description(testsuite))'"
     Main.XUNIT_UNITTEST_RESULTS[] = testsuite
+    # html_report(testsuite)
     # run(`open ./$(html_output(testsuite))`)
 end
 
-@testsuite "Top XParent $topname" metrics=SubModule.MyTestMetrics runner=DistributedTestRunner() html_report=true success_handler=set_results_to_main failure_handler=set_results_to_main begin
+@testsuite "Top XParent $topname" metrics=SubModule.MyTestMetrics runner=DistributedTestRunner() xml_report=true success_handler=set_results_to_main failure_handler=set_results_to_main begin
     @testset "XTest 1" before_each=before_each_fn_gen("Child XTest 1") begin
         @testcase "Child XTest 1 $bottomname" begin
             @test 1 == 1

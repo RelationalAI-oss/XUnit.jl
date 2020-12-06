@@ -140,11 +140,15 @@ Generates an HTML file output for the given testset.
 If `show_stdout` is `true`, then it also prints the test output in the standard output.
 """
 function html_report(rich_ts::RichReportingTestSet)
-    xml_report(rich_ts)
+    try
+        xml_report(rich_ts)
 
-    run(`junit2html $(rich_ts.xml_output)`)
+        run(`junit2html $(rich_ts.xml_output)`)
 
-    println("Test results in HTML format: $(rich_ts.html_output)")
+        println("Test results in HTML format: $(rich_ts.html_output)")
+    catch e
+        @error "Error while producing the HTML report" exception=e
+    end
 
     return rich_ts
 end
