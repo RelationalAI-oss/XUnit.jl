@@ -10,11 +10,12 @@ using Base.Filesystem
 function run_unittests()
     local tests_exception = nothing
     prev_TESTSET_PRINT_ENABLE = XUnit.TESTSET_PRINT_ENABLE[]
-    XUnit.TESTSET_PRINT_ENABLE[] = false
+    XUnit.TESTSET_PRINT_ENABLE[] = true
     try
         XUnit.runtests(joinpath(@__DIR__, "unittests.jl"))
     catch e
         # swallow the error
+        @error "XUnit Tests Progress" exception=e
     finally
         XUnit.TESTSET_PRINT_ENABLE[] = prev_TESTSET_PRINT_ENABLE
     end
