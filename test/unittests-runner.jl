@@ -33,10 +33,14 @@ function run_unittests()
             XUnit._swallow_all_outputs() do
                 XUnit.get_test_counts(test_results)
             end
+        # There are no direct tests under the top-level test-suite. That's why
+        # `passes`, `fails`, `errors` and `broken` are `0`
         @test passes == 0
         @test fails == 0
         @test errors == 0
         @test broken == 0
+        # The following tests check the number of test `passes`, `fails`, `errors` and
+        # `broken` in "unittests.jl"
         @test c_passes == 55
         @test c_fails == 11
         @test c_errors == 4

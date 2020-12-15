@@ -14,8 +14,12 @@ end
 global_param = "global_p"
 extra_param_value = "extra_p"
 
-before_each_fn_gen(fn_name, extra_param=extra_param_value) = () -> println("         >>>> before_each -> $fn_name, $extra_param, $global_param")
-after_each_fn_gen(fn_name, extra_param=extra_param_value) = () -> println("         >>>> after_each -> $fn_name, $extra_param, $global_param")
+function before_each_fn_gen(fn_name, extra_param=extra_param_value)
+    () -> println("         >>>> before_each -> $fn_name, $extra_param, $global_param")
+end
+function after_each_fn_gen(fn_name, extra_param=extra_param_value)
+    () -> println("         >>>> after_each -> $fn_name, $extra_param, $global_param")
+end
 
 println("Running tests with $(nworkers()) processes and $(Threads.nthreads()) threads")
 

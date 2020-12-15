@@ -1,3 +1,7 @@
+# This file is copied from `stdlib/Test/test/runtests.jl`, and adapted to XUnit, to
+# test that XUnit adheres to the same interface and behavior as Julia's `Test`
+# standard library package.
+# ====================
 # Test printing of Fail results
 mutable struct NoThrowTestSet <: XUnit.AbstractTestSet
     results::Vector
