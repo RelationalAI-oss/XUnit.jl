@@ -20,7 +20,7 @@ function run_unittests()
         XUnit.TESTSET_PRINT_ENABLE[] = prev_TESTSET_PRINT_ENABLE
     end
 
-    @testsuite "unittests tests" begin
+    @testset "unittests tests" begin
         @test isdefined(Main, :XUNIT_UNITTEST_RESULTS)
 
         test_results = Main.XUNIT_UNITTEST_RESULTS[]

@@ -27,15 +27,15 @@ println("Running tests with $(nworkers()) processes and $(Threads.nthreads()) th
 topname = "ABC"
 bottomname = "XYZ"
 
-function set_results_to_main(testsuite)
+function set_results_to_main(testset)
     # Set Main.XUNIT_UNITTEST_RESULTS[] to communicate the results back to the test-runner
-    @info "Setting Main.XUNIT_UNITTEST_RESULTS[] to '$(XUnit.get_description(testsuite))'"
-    Main.XUNIT_UNITTEST_RESULTS[] = testsuite
-    # html_report(testsuite)
-    # run(`open ./$(html_output(testsuite))`)
+    @info "Setting Main.XUNIT_UNITTEST_RESULTS[] to '$(XUnit.get_description(testset))'"
+    Main.XUNIT_UNITTEST_RESULTS[] = testset
+    # html_report(testset)
+    # run(`open ./$(html_output(testset))`)
 end
 
-@testsuite "Top XParent $topname" metrics=SubModule.MyTestMetrics runner=DistributedTestRunner() xml_report=true success_handler=set_results_to_main failure_handler=set_results_to_main begin
+@testset "Top XParent $topname" metrics=SubModule.MyTestMetrics runner=DistributedTestRunner() xml_report=true success_handler=set_results_to_main failure_handler=set_results_to_main begin
     @testset "XTest 1" before_each=before_each_fn_gen("Child XTest 1") begin
         @testcase "Child XTest 1 $bottomname" begin
             @test 1 == 1

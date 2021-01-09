@@ -10,35 +10,35 @@ Add the attritube with name `attr` and value `val` to `node`.
 set_attribute!(node, attr, val) = setindex!(node, string(val), attr)
 
 """
-    testsuites_xml(name, id, ntests, nfails, nerrors, x_children)
+    testsets_xml(name, id, ntests, nfails, nerrors, x_children)
 
-Create the testsuites element of a JUnit XML.
+Create the testsets element of a JUnit XML.
 """
-function testsuites_xml(name, id, ntests, nfails, nerrors, x_children)
-    x_testsuite = ElementNode("testsuites")
-    link!.(Ref(x_testsuite), x_children)
-    set_attribute!(x_testsuite, "name", name)
-    set_attribute!(x_testsuite, "id", id)
-    set_attribute!(x_testsuite, "tests", ntests)
-    set_attribute!(x_testsuite, "failures", nfails)
-    set_attribute!(x_testsuite, "errors", nerrors)
-    x_testsuite
+function testsets_xml(name, id, ntests, nfails, nerrors, x_children)
+    x_testset = ElementNode("testsets")
+    link!.(Ref(x_testset), x_children)
+    set_attribute!(x_testset, "name", name)
+    set_attribute!(x_testset, "id", id)
+    set_attribute!(x_testset, "tests", ntests)
+    set_attribute!(x_testset, "failures", nfails)
+    set_attribute!(x_testset, "errors", nerrors)
+    x_testset
 end
 
 """
-    testsuite_xml(name, id, ntests, nfails, nerrors, x_children)
+    testset_xml(name, id, ntests, nfails, nerrors, x_children)
 
-Create a testsuite element of a JUnit XML.
+Create a testset element of a JUnit XML.
 """
-function testsuite_xml(name, id, ntests, nfails, nerrors, x_children)
-    x_testsuite = ElementNode("testsuite")
-    link!.(Ref(x_testsuite), x_children)
-    set_attribute!(x_testsuite, "name", name)
-    set_attribute!(x_testsuite, "id", id)
-    set_attribute!(x_testsuite, "tests", ntests)
-    set_attribute!(x_testsuite, "failures", nfails)
-    set_attribute!(x_testsuite, "errors", nerrors)
-    x_testsuite
+function testset_xml(name, id, ntests, nfails, nerrors, x_children)
+    x_testset = ElementNode("testset")
+    link!.(Ref(x_testset), x_children)
+    set_attribute!(x_testset, "name", name)
+    set_attribute!(x_testset, "id", id)
+    set_attribute!(x_testset, "tests", ntests)
+    set_attribute!(x_testset, "failures", nfails)
+    set_attribute!(x_testset, "errors", nerrors)
+    x_testset
 end
 
 """
@@ -124,22 +124,22 @@ function TestReports.report(ts_rich::RichReportingTestSet)
     total_ntests = 0
     total_nfails = 0
     total_nerrors = 0
-    x_testsuites = map(ts.results) do result
-        x_testsuite, ntests, nfails, nerrors = to_xml(result)
+    x_testsets = map(ts.results) do result
+        x_testset, ntests, nfails, nerrors = to_xml(result)
         total_ntests += ntests
         total_nfails += nfails
         total_nerrors += nerrors;
-        x_testsuite
+        x_testset
     end
 
     xdoc = XMLDocument()
-    root = setroot!(xdoc, testsuites_xml(
+    root = setroot!(xdoc, testsets_xml(
         get_description(ts_rich),
         "_id_",
         total_ntests,
         total_nfails,
         total_nerrors,
-        x_testsuites))
+        x_testsets))
 
     xdoc
 end
@@ -147,9 +147,9 @@ end
 """
     to_xml(ts::AbstractTestSet)
 
-Create a testsuite node from an `AbstractTestSet`, by creating nodes for each result
+Create a testset node from an `AbstractTestSet`, by creating nodes for each result
 in `ts.results`. For creating a JUnit XML, all results must be `Result`s, that is
-they cannot be `AbstractTestSet`s, as the XML cannot have one testsuite nested inside
+they cannot be `AbstractTestSet`s, as the XML cannot have one testset nested inside
 another.
 """
 function to_xml(ts_rich::RichReportingTestSet)
@@ -168,15 +168,15 @@ function to_xml(ts_rich::RichReportingTestSet)
         x_testcase
     end
 
-    x_testsuite = testsuite_xml(get_description(ts_rich), "_id_", total_ntests, total_nfails, total_nerrors, x_testcases)
-    ts isa ReportingTestSet && add_testsuite_properties!(x_testsuite, ts)
+    x_testset = testset_xml(get_description(ts_rich), "_id_", total_ntests, total_nfails, total_nerrors, x_testcases)
+    ts isa ReportingTestSet && add_testset_properties!(x_testset, ts)
 
-    include_test_outputs(ts_rich, x_testsuite)
+    include_test_outputs(ts_rich, x_testset)
 
-    x_testsuite, total_ntests, total_nfails, total_nerrors
+    x_testset, total_ntests, total_nfails, total_nerrors
 end
 
-function include_test_outputs(ts_rich, x_testsuite)
+function include_test_outputs(ts_rich, x_testset)
     output_children = []
     seekstart(ts_rich.out_buff)
     out_data = read(ts_rich.out_buff, String)
@@ -192,7 +192,7 @@ function include_test_outputs(ts_rich, x_testsuite)
         push!(output_children, x_err)
     end
     if !isempty(output_children)
-        link!.(Ref(x_testsuite), output_children)
+        link!.(Ref(x_testset), output_children)
     end
 end
 
@@ -232,12 +232,12 @@ function to_xml(v::Error)
 end
 
 """
-    add_testsuite_properties!(x_testsuite, ts::ReportingTestSet)
+    add_testset_properties!(x_testset, ts::ReportingTestSet)
 
 Add all key value pairs in the `properties` field of a `ReportingTestSet` to the
-corresponding testsuite xml element.
+corresponding testset xml element.
 """
-function add_testsuite_properties!(x_testsuite, ts::ReportingTestSet)
+function add_testset_properties!(x_testset, ts::ReportingTestSet)
     if !isempty(keys(ts.properties))
         x_properties = ElementNode("properties")
         for (name, value) in ts.properties
@@ -246,7 +246,7 @@ function add_testsuite_properties!(x_testsuite, ts::ReportingTestSet)
             set_attribute!(x_property, "value", value)
             link!(x_properties, x_property)
         end
-        link!(x_testsuite, x_properties)
+        link!(x_testset, x_properties)
     end
-    return x_testsuite
+    return x_testset
 end

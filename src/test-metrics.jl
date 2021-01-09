@@ -36,9 +36,9 @@ end
 
 function gather_test_metrics(t::AsyncTestSuite)
     if !t.disabled
-        for sub_testsuite in t.sub_testsuites
-            gather_test_metrics(sub_testsuite)
-            combine_test_metrics(t, sub_testsuite)
+        for sub_testset in t.sub_testsets
+            gather_test_metrics(sub_testset)
+            combine_test_metrics(t, sub_testset)
         end
 
         for sub_testcase in t.sub_testcases
@@ -92,8 +92,8 @@ end
 
 function save_test_metrics(ts::AsyncTestSuite)
     if !ts.disabled
-        for sub_testsuite in ts.sub_testsuites
-            save_test_metrics(sub_testsuite)
+        for sub_testset in ts.sub_testsets
+            save_test_metrics(sub_testset)
         end
 
         save_test_metrics(ts.testset_report, ts.metrics)
@@ -141,35 +141,35 @@ end
 
 """
     create_test_metrics(
-        parent_testsuite::Option{AsyncTestSuiteOrTestCase}, ::Type{T}
+        parent_testset::Option{AsyncTestSuiteOrTestCase}, ::Type{T}
     ) where T <: TestMetrics
 
 Creates a new `TestMetrics` instance based on the given type `T`
 
-If `T` is `Nothing`, then an instance of `TestMetrics` similar to `parent_testsuite.metrics`
+If `T` is `Nothing`, then an instance of `TestMetrics` similar to `parent_testset.metrics`
 is created (if it exists). Otherwise, returns `nothing`.
 """
 function create_test_metrics(
-    parent_testsuite::Option{AsyncTestSuiteOrTestCase}, ::Type{T}
+    parent_testset::Option{AsyncTestSuiteOrTestCase}, ::Type{T}
 ) where T <: TestMetrics
-    if !(parent_testsuite === nothing || parent_testsuite.metrics === nothing || parent_testsuite.metrics isa T)
-        error("All metrics in the hierarchy should be the same. Expected $(typeof(parent_testsuite.metrics)) got $T")
+    if !(parent_testset === nothing || parent_testset.metrics === nothing || parent_testset.metrics isa T)
+        error("All metrics in the hierarchy should be the same. Expected $(typeof(parent_testset.metrics)) got $T")
     end
     return create_new_measure_instance(T; report_metric=true)
 end
 
 function create_test_metrics(
-    parent_testsuite::Option{AsyncTestSuiteOrTestCase}, ::T
+    parent_testset::Option{AsyncTestSuiteOrTestCase}, ::T
 ) where T <: TestMetrics
-    return create_test_metrics(parent_testsuite, T)
+    return create_test_metrics(parent_testset, T)
 end
 
 function create_test_metrics(
-    parent_testsuite::Option{AsyncTestSuiteOrTestCase}, ::Nothing
+    parent_testset::Option{AsyncTestSuiteOrTestCase}, ::Nothing
 )
-    return parent_testsuite === nothing ?
+    return parent_testset === nothing ?
         nothing :
-        create_new_measure_instance(parent_testsuite.metrics; report_metric=false)
+        create_new_measure_instance(parent_testset.metrics; report_metric=false)
 end
 
 """
@@ -180,9 +180,9 @@ Determines wether a test-case, test-suite or TestMetrics instance should report 
 back and save its results (when `save_test_metrics` is called)
 
 `AsyncTestCase.metrics` and `AsyncTestSuite.metrics` are already optional fields.
-If you mark a `@testcase` or `@testsuite` with an explicit `metrics` parameter, then it will
+If you mark a `@testcase` or `@testset` with an explicit `metrics` parameter, then it will
 report the metrics for that test-case or test-suite.
-However, for a `@testsuite` (that can have other test-cases or test-suites (hierarchy)
+However, for a `@testset` (that can have other test-cases or test-suites (hierarchy)
 underneath itself), we still need to collect metrics for all those test-cases and
 test-suites, even though we won't report them. We use those collected metrics to report
 the metrics to their parent (by aggregating them at parent).

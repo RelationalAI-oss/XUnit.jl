@@ -4,53 +4,53 @@ struct ParallelTestRunner <: TestRunner end
 struct DistributedTestRunner <: TestRunner end
 
 # Runs a Scheduled Test-Suite
-function run_testsuite(
+function run_testset(
     ::Type{T},
-    testsuite::AsyncTestSuiteOrTestCase;
+    testset::AsyncTestSuiteOrTestCase;
     throw_on_error::Bool=true,
     show_stdout::Bool=TESTSET_PRINT_ENABLE[],
 ) where T <: TestRunner
-    return run_testsuite(
-        testsuite, T;
+    return run_testset(
+        testset, T;
         throw_on_error=throw_on_error, show_stdout=show_stdout
     )
 end
 
-function run_testsuite(
-    testsuite::AsyncTestSuiteOrTestCase,
-    ::Type{T}=typeof(testsuite.runner);
+function run_testset(
+    testset::AsyncTestSuiteOrTestCase,
+    ::Type{T}=typeof(testset.runner);
     throw_on_error::Bool=true,
     show_stdout::Bool=TESTSET_PRINT_ENABLE[],
 )::Bool where {T <: TestRunner}
-    # if `_run_testsuite` returns false, then we do not proceed with finalizing the report
+    # if `_run_testset` returns false, then we do not proceed with finalizing the report
     # as it means that tests haven't ran and will run seprately
-    if _run_testsuite(T, testsuite)
-        _finalize_reports(testsuite)
-        gather_test_metrics(testsuite)
-        save_test_metrics(testsuite)
+    if _run_testset(T, testset)
+        _finalize_reports(testset)
+        gather_test_metrics(testset)
+        save_test_metrics(testset)
         if show_stdout
-            display_reporting_testset(testsuite, throw_on_error=false)
+            display_reporting_testset(testset, throw_on_error=false)
         end
 
-        testsuite.xml_report && xml_report(testsuite)
-        testsuite.html_report && html_report(testsuite)
+        testset.xml_report && xml_report(testset)
+        testset.html_report && html_report(testset)
 
         if throw_on_error
             prev_TESTSET_PRINT_ENABLE = TESTSET_PRINT_ENABLE[]
             TESTSET_PRINT_ENABLE[] = false
             try
                 _swallow_all_outputs() do # test results are already printed. Let's avoid printing the errors twice.
-                    display_reporting_testset(testsuite; throw_on_error=true)
+                    display_reporting_testset(testset; throw_on_error=true)
                 end
             catch e
-                testsuite.failure_handler(testsuite)
+                testset.failure_handler(testset)
                 rethrow()
             finally
                 TESTSET_PRINT_ENABLE[] = prev_TESTSET_PRINT_ENABLE
             end
         end
 
-        testsuite.success_handler(testsuite)
+        testset.success_handler(testset)
 
         return true
     end
@@ -70,21 +70,21 @@ function _swallow_all_outputs(dofunc::Function)
     end
 end
 
-function _run_testsuite(
+function _run_testset(
     ::Type{T},
-    testsuite::AsyncTestSuiteOrTestCase,
+    testset::AsyncTestSuiteOrTestCase,
 ) where T <: TestRunner
-    scheduled_tests = _schedule_tests(T, testsuite)
+    scheduled_tests = _schedule_tests(T, testset)
     _run_scheduled_tests(T, scheduled_tests)
     return true
 end
 
-function _run_testsuite(
+function _run_testset(
     ::Type{T},
-    testsuite::AsyncTestSuite,
+    testset::AsyncTestSuite,
 ) where T <: DistributedTestRunner
     try
-        scheduled_tests = _schedule_tests(T, testsuite)
+        scheduled_tests = _schedule_tests(T, testset)
         tls = task_local_storage()
         already_running = haskey(tls, :__ALREADY_RUNNING_DISTRIBUTED_TESTS__)
         if myid() == 1
@@ -124,19 +124,19 @@ end
 
 function _schedule_tests(
     ::Type{T},
-    testsuite::AsyncTestSuite,
+    testset::AsyncTestSuite,
     testcases_acc::Vector{ScheduledTest}=ScheduledTest[],
     parent_testsets::Vector{AsyncTestSuite}=AsyncTestSuite[]
 ) where T <: TestRunner
     parent_testsets = copy(parent_testsets)
-    push!(parent_testsets, testsuite)
-    for sub_testsuite in testsuite.sub_testsuites
-        if !sub_testsuite.disabled
-            _schedule_tests(T, sub_testsuite, testcases_acc, parent_testsets)
+    push!(parent_testsets, testset)
+    for sub_testset in testset.sub_testsets
+        if !sub_testset.disabled
+            _schedule_tests(T, sub_testset, testcases_acc, parent_testsets)
         end
     end
 
-    for sub_testcase in testsuite.sub_testcases
+    for sub_testcase in testset.sub_testcases
         if !sub_testcase.disabled
             st = ScheduledTest(parent_testsets, sub_testcase)
             push!(testcases_acc, st)
@@ -163,11 +163,11 @@ end
 
 function _schedule_tests(
     ::Type{ShuffledTestRunner},
-    testsuite::AsyncTestSuite,
+    testset::AsyncTestSuite,
     testcases_acc::Vector{ScheduledTest}=ScheduledTest[],
     parent_testsets::Vector{AsyncTestSuite}=AsyncTestSuite[]
 )
-    seq_testcases = _schedule_tests(SequentialTestRunner, testsuite, testcases_acc, parent_testsets)
+    seq_testcases = _schedule_tests(SequentialTestRunner, testset, testcases_acc, parent_testsets)
     shuffle!(seq_testcases)
     return seq_testcases
 end
@@ -231,27 +231,27 @@ function _run_scheduled_tests(
     end
 end
 
-function _run_testsuite(
+function _run_testset(
     ::Type{SequentialTestRunner},
-    testsuite::AsyncTestSuite,
+    testset::AsyncTestSuite,
     parent_testsets::Vector{AsyncTestSuite}=AsyncTestSuite[]
 )
-    parent_testsets = vcat(parent_testsets, [testsuite])
+    parent_testsets = vcat(parent_testsets, [testset])
     suite_path = _get_path(parent_testsets)
-    if !testsuite.disabled
+    if !testset.disabled
         if TESTSET_PRINT_ENABLE[]
             print("Running ")
             printstyled(suite_path; bold=true)
             println(" test-suite...")
         end
-        for sub_testsuite in testsuite.sub_testsuites
+        for sub_testset in testset.sub_testsets
             if TESTSET_PRINT_ENABLE[]
                 print("  "^length(parent_testsets))
             end
-            _run_testsuite(SequentialTestRunner, sub_testsuite, parent_testsets)
+            _run_testset(SequentialTestRunner, sub_testset, parent_testsets)
         end
 
-        for sub_testcase in testsuite.sub_testcases
+        for sub_testcase in testset.sub_testcases
             if TESTSET_PRINT_ENABLE[]
                 print("  "^length(parent_testsets))
             end
@@ -293,10 +293,10 @@ function run_single_testcase(
     # start from an empty stack
     # this will have help with having proper indentation if a `@testset` appears under a `@testcase`
     empty!(rs.stack)
-    for testsuite in parents_with_this
-        ts = testsuite.testset_report
+    for testset in parents_with_this
+        ts = testset.testset_report
         push!(rs.stack, get_description(ts))
-        push!(rs.test_suites_stack, testsuite)
+        push!(rs.test_suites_stack, testset)
         Test.push_testset(ts)
     end
 
@@ -319,12 +319,12 @@ function run_single_testcase(
             tls[:SOURCE_PATH] = testcase_path
         end
 
-        for testsuite in parent_testsets
-            testsuite.before_each_hook()
+        for testset in parent_testsets
+            testset.before_each_hook()
         end
         run_and_gather_test_metrics(sub_testcase; run=true)
-        for testsuite in reverse(parent_testsets)
-            testsuite.after_each_hook()
+        for testset in reverse(parent_testsets)
+            testset.after_each_hook()
         end
     catch err
         has_wrapped_exception(err, InterruptException) && rethrow()
@@ -351,8 +351,8 @@ function run_single_testcase(
     end
 end
 
-function _get_path(testsuite_stack)
-    join(map(testsuite -> get_description(testsuite), testsuite_stack), "/")
+function _get_path(testset_stack)
+    join(map(testset -> get_description(testset), testset_stack), "/")
 end
 
 """
@@ -385,29 +385,29 @@ function _async_with_error_log_expr(expr, message="")
     end)
 end
 
-function _finalize_reports(testsuite::TEST_SUITE)::TEST_SUITE where TEST_SUITE <: AsyncTestSuite
-    Test.push_testset(testsuite.testset_report)
+function _finalize_reports(testset::TEST_SUITE)::TEST_SUITE where TEST_SUITE <: AsyncTestSuite
+    Test.push_testset(testset.testset_report)
     try
-        for sub_testsuite in testsuite.sub_testsuites
-            _finalize_reports(sub_testsuite)
+        for sub_testset in testset.sub_testsets
+            _finalize_reports(sub_testset)
         end
 
-        for sub_testcase in testsuite.sub_testcases
+        for sub_testcase in testset.sub_testcases
             _finalize_reports(sub_testcase)
         end
     finally
         Test.pop_testset()
     end
 
-    Test.finish(testsuite.testset_report)
-    return testsuite
+    Test.finish(testset.testset_report)
+    return testset
 end
 
 function _finalize_reports(testcase::TEST_CASE)::TEST_CASE where TEST_CASE <: AsyncTestCase
     Test.push_testset(testcase.testset_report)
     try
-        for sub_testsuite in testcase.sub_testsuites
-            _finalize_reports(sub_testsuite)
+        for sub_testset in testcase.sub_testsets
+            _finalize_reports(sub_testset)
         end
 
         for sub_testcase in testcase.sub_testcases
@@ -586,7 +586,7 @@ function _run_scheduled_tests(
         orig_test_case = scheduled_tests[job_id].target_testcase
         if returned_test_case !== nothing
             orig_test_case.testset_report = returned_test_case.testset_report
-            orig_test_case.sub_testsuites = map(msg -> AsyncTestSuite(orig_test_case, msg), returned_test_case.sub_testsuites)
+            orig_test_case.sub_testsets = map(msg -> AsyncTestSuite(orig_test_case, msg), returned_test_case.sub_testsets)
             orig_test_case.sub_testcases = map(msg -> AsyncTestCase(orig_test_case, msg), returned_test_case.sub_testcases)
             orig_test_case.metrics = returned_test_case.metrics
             save_test_metrics(orig_test_case)
@@ -603,7 +603,7 @@ struct DistributedAsyncTestMessage
     testset_report::AbstractTestSet
     source::LineNumberNode
     disabled::Bool
-    sub_testsuites::Vector{DistributedAsyncTestMessage}
+    sub_testsets::Vector{DistributedAsyncTestMessage}
     sub_testcases::Vector{DistributedAsyncTestMessage}
     metrics::Option{TestMetrics}
 end
@@ -613,7 +613,7 @@ function DistributedAsyncTestMessage(t::AsyncTestSuiteOrTestCase)
         convert_results_to_be_transferrable(t.testset_report),
         t.source,
         t.disabled,
-        map(DistributedAsyncTestMessage, t.sub_testsuites),
+        map(DistributedAsyncTestMessage, t.sub_testsets),
         map(DistributedAsyncTestMessage, t.sub_testcases),
         t.metrics,
     )
@@ -629,8 +629,8 @@ function AsyncTestCase(parent::AsyncTestSuiteOrTestCase, msg::DistributedAsyncTe
         metrics=msg.metrics,
     )
 
-    for sub_testsuite in msg.sub_testsuites
-        AsyncTestSuite(t, sub_testsuite) # the returned test-suite is already registered with its parent
+    for sub_testset in msg.sub_testsets
+        AsyncTestSuite(t, sub_testset) # the returned test-suite is already registered with its parent
     end
 
     for sub_testcase in msg.sub_testcases
@@ -649,8 +649,8 @@ function AsyncTestSuite(parent::AsyncTestSuiteOrTestCase, msg::DistributedAsyncT
         metrics=msg.metrics,
     )
 
-    for sub_testsuite in msg.sub_testsuites
-        AsyncTestSuite(t, sub_testsuite) # the returned test-suite is already registered with its parent
+    for sub_testset in msg.sub_testsets
+        AsyncTestSuite(t, sub_testset) # the returned test-suite is already registered with its parent
     end
 
     for sub_testcase in msg.sub_testcases
