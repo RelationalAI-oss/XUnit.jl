@@ -12,6 +12,7 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 TestReports = "dcd651b4-b50a-5b6b-8f22-87e9f253a252"
 
 [compat]
+julia = "≥ 1.3"
 ExceptionUnwrapping = "0.1"
 EzXML = "1"
 TestReports = "0.4"

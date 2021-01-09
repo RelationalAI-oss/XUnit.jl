@@ -2,6 +2,7 @@ using XUnit
 using Distributed
 
 include(joinpath(@__DIR__, "subdir2/subdir2-macrodef.jl"))
+import .SubModule
 
 function fn_throws()
     throw(KeyError("Test error!"))
