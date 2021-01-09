@@ -779,14 +779,6 @@ function Test.scrub_backtrace(bt::Vector)
 end
 
 function Test.record(ts::Test.DefaultTestSet, t::Fail)
-    if Test.myid() == 1
-        printstyled(get_description(ts), ": ", color=:white)
-        # don't print for interrupted tests
-        if t.test_type !== :test_interrupted
-            print(t)
-            println()
-        end
-    end
     push!(ts.results, t)
     t, backtrace()
 end
