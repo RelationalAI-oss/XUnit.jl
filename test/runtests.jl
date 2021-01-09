@@ -15,7 +15,10 @@ using XUnit: guardseed, ReportingTestSet
 import Logging: Debug, Info, Warn
 
 include("unittests-runner.jl")
-include("base-tests.jl")
+if VERSION.major == 1 && VERSION.minor == 5
+    # The Base.Test tests are expected to only work on Julia 1.5
+    include("base-tests.jl")
+end
 include("regex-tests.jl")
 
 end
