@@ -515,6 +515,19 @@ function run_testcase_inplace(testcase_obj)
     return testcase_obj
 end
 
+# XUnit.checked_testsuite_expr consumes hook_fn_options. Callers generate hook_fn_options
+# from Test internals, namely the Test.parse_testset_args function. Test.parse_testset_args
+# exposes a macro hygiene bug in Julia in its result. Consequently,
+# XUnit.checked_testsuite_expr (hygiene-)escapes the result of Test.parse_testset_args
+# passed via hook_fn_options to work around the macro hygiene issue. That macro hygiene
+# issue was fixed during the Julia 1.6 development cycle, which changed the behavior
+# of Test.parse_testset_args such that the hygiene-escaping workaround is no longer correct.
+#
+# To make Delve happy under both Julia 1.5 and 1.6, we introduce a function that
+# applies the workaround only if necessary. This function / its calls should be
+# removed once migration to Julia 1.6 is complete.
+esc_if_needed(x) = VERSION < v"1.6-" ? esc(x) : x
+
 # This function is the common function for handling the body of all `@testset`,
 # and `@testcase` macros. This is how it works:
 # - if a `@testset` or `@testcase` is disabled, it skips it.
@@ -578,9 +591,9 @@ function checked_testset_expr(
             $(
                 if !is_testcase #if it's a `@testset`, runs its body
                     quote
-                        testset_obj = XUnit.AsyncTestSuite(
+                        testsuite_obj = XUnit.AsyncTestSuite(
                             ts, $(QuoteNode(source)), parent_testset_obj;
-                            disabled=!shouldrun, $(esc(hook_fn_options))...
+                            disabled=!shouldrun, $(esc_if_needed(hook_fn_options))...
                         )
 
                         push!(rs.test_suites_stack, testset_obj)
@@ -613,7 +626,7 @@ function checked_testset_expr(
                         testset_or_testcase = if shouldrun # if a `@testcase` is not disabled
                             testcase_obj = XUnit.AsyncTestCase(
                                 ts, $(QuoteNode(source)), parent_testset_obj;
-                                disabled=!shouldrun, $(esc(hook_fn_options))...) do
+                                disabled=!shouldrun, $(esc_if_needed(hook_fn_options))...) do
                                     $(esc(ts_expr))
                             end
 
@@ -631,7 +644,7 @@ function checked_testset_expr(
                         else  # if a `@testcase` is disabled, skipt it
                             XUnit.AsyncTestCase(
                                 ts, $(QuoteNode(source)), parent_testset_obj;
-                                disabled=!shouldrun, $(esc(hook_fn_options))...) do
+                                disabled=!shouldrun, $(esc_if_needed(hook_fn_options))...) do
                                     nothing
                             end
                         end
