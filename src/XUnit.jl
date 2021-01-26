@@ -591,7 +591,7 @@ function checked_testset_expr(
             $(
                 if !is_testcase #if it's a `@testset`, runs its body
                     quote
-                        testsuite_obj = XUnit.AsyncTestSuite(
+                        testset_obj = XUnit.AsyncTestSuite(
                             ts, $(QuoteNode(source)), parent_testset_obj;
                             disabled=!shouldrun, $(esc_if_needed(hook_fn_options))...
                         )
