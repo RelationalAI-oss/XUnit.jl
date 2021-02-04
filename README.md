@@ -28,7 +28,7 @@ There are two concepts used for creating your test hierarchy:
  - `test-case`: is used for declaring a unit-test. You can think of `test-case`s as leaves of your test hierarchy. You can create a `test-case` using the `@testcase` macro.
 
 Executing the tests using `XUnit.jl` happens in two phases:
- - Scheduling: when Julia processes test hierarchy macros (`@testset` and `@testcase`), it doesn't immediately runs `test-case`s. Instead, it creates the `test-set` hierarchy and also creates handles to `test-case`s.
+ - Scheduling: when Julia processes test hierarchy macros (`@testset` and `@testcase`), it doesn't immediately run `test-case`s. Instead, it creates the `test-set` hierarchy and also creates handles to `test-case`s.
  - Running: After scheduling the tests, you have the choice of running the tests using a `test-runner`. Each `test-runner` has a different strategy for running the tests (explained below).
 
 `XUnit.jl` rewrites/re-exports `@testset` and `@test*` macros provided by `Base.Test` (and you need to use these macros directly from `XUnit` instead of `Test`).
