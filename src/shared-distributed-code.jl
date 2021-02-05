@@ -107,7 +107,7 @@ function do_work(jobs, results) # define work function everywhere
     catch err
         has_wrapped_exception(err, InterruptException) && rethrow()
 
-        println("A critical error occued in XUnit while running tests: ", err)
+        println("A critical error occurred in XUnit while running tests: ", err)
         for s in stacktrace(catch_backtrace())
             println(s)
         end

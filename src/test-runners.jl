@@ -549,20 +549,20 @@ function _run_scheduled_tests(
 
     handled_scheduled_tests = falses(length(scheduled_tests))
 
+    initial_workers = workers()
     while n > 0 # collect results
-        job_id, returned_test_case, worker = take!(results)
-
-        # `job_id == 0` means that a critical error occurred with one of worker processes
-        # then, we stop testing here and report results early by showing an error for all
-        # remaining tests
-        # Note: if some worker processes are still alive, they might continue processing
-        #       tests, but their produced results are not consumed anymore.
-        #       That's why the main process first tries to drain the whole `jobs` channel.
-        if job_id == 0
+        # stop testing here and report results early by showing an error for all remaining tests
+        function nontest_error(worker, message)
+            # Note: if some worker processes are still alive, they might continue processing
+            #       tests, but their produced results are not consumed anymore.
+            #       That's why the main process first tries to drain the whole `jobs` channel.
             while true
                 (scheduled_tests_index, _) = take!(jobs)
                 scheduled_tests_index == -1 && break
             end
+
+            # report a failure outside of a test, reporting it as the failure of
+            # whatever outstanding unhandled tests there are.
             for (job_id, ishandled) in enumerate(handled_scheduled_tests)
                 if !ishandled
                     orig_test_case = scheduled_tests[job_id].target_testcase
@@ -570,12 +570,30 @@ function _run_scheduled_tests(
                     XUnit.record(ts, Test.Error(
                         :nontest_error,
                         Expr(:tuple),
-                        "An error occurred in the worker test-runner process.",
-                        Base.catch_stack(),
+                        message,
+                        Any[(ErrorException(message), backtrace())],
                         orig_test_case.source
                     ))
                 end
             end
+        end
+
+        # fetch results from workers, if we can
+        if !isready(results)
+            # detect crashes by inspecting the list of workers
+            if initial_workers != workers()
+                crashed_workers = setdiff(initial_workers, workers())
+                nontest_error(first(crashed_workers), "Worker $(first(crashed_workers)) disappeared.")
+                break
+            end
+            sleep(1)
+            continue
+        end
+
+        job_id, returned_test_case, worker = take!(results)
+        if job_id == 0
+            # `job_id == 0` means that a critical error occurred with one of worker processes
+            nontest_error(worker, "An error occurred in the worker test-runner process.")
             break
         else
             # mark test as handled
