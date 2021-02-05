@@ -2,9 +2,8 @@ module SharedDistributedCode
 
 using Distributed
 using Test
-using ExceptionUnwrapping: has_wrapped_exception
 using XUnit
-using XUnit: create_deep_copy
+using XUnit: create_deep_copy, has_wrapped_exception
 
 function do_work(jobs, results) # define work function everywhere
     try
