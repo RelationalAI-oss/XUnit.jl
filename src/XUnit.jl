@@ -547,10 +547,6 @@ function checked_testset_expr(
         local testset_or_testcase = nothing
 
         try
-            std_io = IOBuffer()
-            if XUnit.TESTSET_PRINT_ENABLE[]
-                print(std_io, "  "^length(rs.stack))
-            end
             path = XUnit.open_testset(rs, $name)
             shouldrun = length(rs.stack) <= rs.maxdepth &&
                         XUnit.pmatch(rs.include, path) != nothing &&
@@ -562,31 +558,35 @@ function checked_testset_expr(
                 last(rs.test_suites_stack)
             end
 
-            if shouldrun # if it's not disabled
-                if XUnit.TESTSET_PRINT_ENABLE[]
+            if XUnit.TESTSET_PRINT_ENABLE[] && Distributed.myid() == 1
+                # don't print testset scheduling information on non-master nodes,
+                # since it's expected to be identical anyway.
+
+                std_io = IOBuffer()
+                print(std_io, "  "^(length(rs.stack)-1))
+
+                if shouldrun # if it's not disabled
                     if $is_testcase && !haskey(tls, :__TESTCASE_IS_RUNNING__)
                         # if it's a `@testcase` NOT enclosed inside another `@testcase`,
                         # then it gets scheduled for running later
                         print(std_io, "Scheduling ")
                     else
                         # otherwise, if it IS enclosed inside another `@testcase`,
-                        # we run it immediately
+                        # or if we're dealnig with a `@testset`, we run it immediately
                         print(std_io, "Running ")
                     end
                     printstyled(std_io, path; bold=true)
                     println(std_io, " tests...")
-                end
-            else # skip disabled `@testset`s and `@testcase`s
-                if XUnit.TESTSET_PRINT_ENABLE[]
+                else # skip disabled `@testset`s and `@testcase`s
                     printstyled(
                         std_io, "Skipped Scheduling $path tests...\n"; color=:light_black
                     )
                 end
-            end
 
-            seekstart(std_io)
-            # thread-safe print
-            print(read(std_io, String))
+                seekstart(std_io)
+                # thread-safe print
+                print(read(std_io, String))
+            end
 
             $(
                 if !is_testcase #if it's a `@testset`, runs its body
