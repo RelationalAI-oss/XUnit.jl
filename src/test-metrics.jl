@@ -38,11 +38,15 @@ function gather_test_metrics(t::AsyncTestSuite)
     if !t.disabled
         for sub_testset in t.sub_testsets
             gather_test_metrics(sub_testset)
-            combine_test_metrics(t, sub_testset)
+            sub_t = combine_test_metrics(t, sub_testset)
+             # we should only mutate the current t inside combine_test_metrics 
+            @assert t === sub_t
         end
 
         for sub_testcase in t.sub_testcases
-            combine_test_metrics(t, sub_testcase)
+            sub_t = combine_test_metrics(t, sub_testcase)
+             # we should only mutate the current t inside combine_test_metrics 
+            @assert t === sub_t
         end
     end
 end
@@ -111,14 +115,19 @@ Combines the merics results from a `sub` into its `parent`
 """
 function combine_test_metrics(parent, sub)
     # nothing to do
+    # we should always return the new parent, in case we've replaced the parent.
+    # Note: we can replace the parent only if it's a subtype of `TestMetrics`
+    return parent
 end
 
 function combine_test_metrics(parent::AsyncTestSuite, sub::AsyncTestSuite)
-    combine_test_metrics(parent.metrics, sub.metrics)
+    parent.metrics = combine_test_metrics(parent.metrics, sub.metrics)
+    return parent
 end
 
 function combine_test_metrics(parent::AsyncTestSuite, sub::AsyncTestCase)
-    combine_test_metrics(parent.metrics, sub.metrics)
+    parent.metrics = combine_test_metrics(parent.metrics, sub.metrics)
+    return parent
 end
 
 function combine_test_metrics(parent::DefaultTestMetrics, sub::DefaultTestMetrics)
@@ -136,7 +145,7 @@ function combine_test_metrics(parent::DefaultTestMetrics, sub::DefaultTestMetric
         parent.gcstats.pause + sub.gcstats.pause,
         parent.gcstats.full_sweep + sub.gcstats.full_sweep,
     )
-    nothing
+    return parent
 end
 
 """
@@ -159,9 +168,9 @@ function create_test_metrics(
 end
 
 function create_test_metrics(
-    parent_testset::Option{AsyncTestSuiteOrTestCase}, ::T
+    parent_testset::Option{AsyncTestSuiteOrTestCase}, instance::T
 ) where T <: TestMetrics
-    return create_test_metrics(parent_testset, T)
+    return create_new_measure_instance(instance; report_metric=true)
 end
 
 function create_test_metrics(

@@ -38,7 +38,7 @@ mutable struct _AsyncTestCase{ASYNC_TEST_SUITE}
     modify_lock::ReentrantLock
 end
 
-struct AsyncTestSuite
+mutable struct AsyncTestSuite
     testset_report::AbstractTestSet
     parent_testset::Option{Union{_AsyncTestCase{AsyncTestSuite},AsyncTestSuite}}
     before_each_hook::Function
