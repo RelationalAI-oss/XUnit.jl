@@ -38,11 +38,11 @@ function gather_test_metrics(t::AsyncTestSuite)
     if !t.disabled
         for sub_testset in t.sub_testsets
             gather_test_metrics(sub_testset)
-            combine_test_metrics(t, sub_testset)
+            t = combine_test_metrics(t, sub_testset)
         end
 
         for sub_testcase in t.sub_testcases
-            combine_test_metrics(t, sub_testcase)
+            t = combine_test_metrics(t, sub_testcase)
         end
     end
 end
@@ -114,11 +114,13 @@ function combine_test_metrics(parent, sub)
 end
 
 function combine_test_metrics(parent::AsyncTestSuite, sub::AsyncTestSuite)
-    combine_test_metrics(parent.metrics, sub.metrics)
+    parent.metrics = combine_test_metrics(parent.metrics, sub.metrics)
+    return parent
 end
 
 function combine_test_metrics(parent::AsyncTestSuite, sub::AsyncTestCase)
-    combine_test_metrics(parent.metrics, sub.metrics)
+    parent.metrics = combine_test_metrics(parent.metrics, sub.metrics)
+    return parent
 end
 
 function combine_test_metrics(parent::DefaultTestMetrics, sub::DefaultTestMetrics)
@@ -136,7 +138,7 @@ function combine_test_metrics(parent::DefaultTestMetrics, sub::DefaultTestMetric
         parent.gcstats.pause + sub.gcstats.pause,
         parent.gcstats.full_sweep + sub.gcstats.full_sweep,
     )
-    nothing
+    return parent
 end
 
 """
@@ -159,9 +161,9 @@ function create_test_metrics(
 end
 
 function create_test_metrics(
-    parent_testset::Option{AsyncTestSuiteOrTestCase}, ::T
+    parent_testset::Option{AsyncTestSuiteOrTestCase}, instance::T
 ) where T <: TestMetrics
-    return create_test_metrics(parent_testset, T)
+    return create_new_measure_instance(instance; report_metric=true)
 end
 
 function create_test_metrics(
