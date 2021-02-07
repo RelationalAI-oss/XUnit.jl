@@ -111,6 +111,9 @@ Combines the merics results from a `sub` into its `parent`
 """
 function combine_test_metrics(parent, sub)
     # nothing to do
+   # we should always return the new parent, in case we've replaced the parent.
+   # Note: we can replace the parent only if it's a subtype of `TestMetrics`
+    return parent
 end
 
 function combine_test_metrics(parent::AsyncTestSuite, sub::AsyncTestSuite)
