@@ -38,11 +38,15 @@ function gather_test_metrics(t::AsyncTestSuite)
     if !t.disabled
         for sub_testset in t.sub_testsets
             gather_test_metrics(sub_testset)
-            t = combine_test_metrics(t, sub_testset)
+            sub_t = combine_test_metrics(t, sub_testset)
+             # we should only mutate the current t inside combine_test_metrics 
+            @assert t === sub_t
         end
 
         for sub_testcase in t.sub_testcases
-            t = combine_test_metrics(t, sub_testcase)
+            sub_t = combine_test_metrics(t, sub_testcase)
+             # we should only mutate the current t inside combine_test_metrics 
+            @assert t === sub_t
         end
     end
 end
