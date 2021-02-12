@@ -372,7 +372,7 @@ function testset_handler(args, source)
     end
 
     if tests.head === :for
-        return testset_forloop(args, tests, source)
+        return testset_forloop(args, tests, source, TestSetType)
     else
         return testset_beginend(args, tests, source, TestSetType)
     end
@@ -382,11 +382,46 @@ end
     testset_forloop(args, testloop, source)
 
 Generate the code for a `@testset` with a `for` loop argument
-
-Note: It's not supported yet.
 """
-function testset_forloop(args, testloop, source)
-    error("For loop in `XUnit.@testset` is not supported.")
+function testset_forloop(args, testloop, source, suite_type::SuiteType)
+    # Pull out the loop variables. We might need them for generating the
+    # description and we'll definitely need them for generating the
+    # comprehension expression at the end
+    loopvars = Expr[]
+    if testloop.args[1].head === :(=)
+        push!(loopvars, testloop.args[1])
+    elseif testloop.args[1].head === :block
+        for loopvar in testloop.args[1].args
+            push!(loopvars, loopvar)
+        end
+    else
+        error("Unexpected argument to @testset")
+    end
+
+    option_args = args[1:end-1]
+    desc, testsettype, options = XUnit.parse_testset_args(option_args)
+
+    if desc === nothing
+        # No description provided. Generate from the loop variable names
+        v = loopvars[1].args[1]
+        desc = Expr(:string, "$v = ", v) # first variable
+        for l = loopvars[2:end]
+            v = l.args[1]
+            push!(desc.args, ", $v = ")
+            push!(desc.args, v)
+        end
+
+        # we'll be forwarding the option arguments, so add a description
+        option_args = (option_args..., desc)
+    end
+
+    # generate a loop that calls a regular @testset multiple times,
+    # each time with a different description
+    iter, body = testloop.args
+    blk = testset_beginend((option_args..., body), body, source, suite_type)
+    quote
+        $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
+    end
 end
 
 """
@@ -703,11 +738,15 @@ function testcase_handler(args, source)
     tests = args[end]
 
     # Determine if a single block or for-loop style
-    if !isa(tests, Expr) || !_is_block(tests)
+    if !isa(tests, Expr) || (tests.head !== :for && !_is_block(tests))
         error("Expected begin/end block or for loop as argument to @testcase")
     end
 
-    return testset_beginend(args, tests, source, TestCaseType)
+    if tests.head === :for
+        return testset_forloop(args, tests, source, TestCaseType)
+    else
+        return testset_beginend(args, tests, source, TestCaseType)
+    end
 end
 
 # END TestCase
