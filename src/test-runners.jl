@@ -310,7 +310,11 @@ function run_single_testcase(
     saved_source_path = has_saved_source_path ? tls[:SOURCE_PATH] : nothing
     try
         # RNG is re-seeded with its own seed to ease reproduce a failed test
-        Random.seed!(RNG.seed)
+        if VERSION >= v"1.7.0-DEV.1225"
+            Random.seed!(Random.GLOBAL_SEED)
+        else
+            Random.seed!(RNG.seed)
+        end
 
         # we change the source path directory to the path of the test-case to make its
         # direct `include`s (if any) work correctly
