@@ -716,6 +716,10 @@ function convert_results_to_be_transferrable(res::Pass)
         # on other processes (e.g., the master process that consolidates the results)
         # The stack-trace is converted to string here.
         return Pass(:test_throws, nothing, nothing, string(res.value))
+    else
+        # Ignore the `res.data` field for Test.Pass, since it can contain values interpolated
+        # into the Expr, which may only be valid in this process.
+        return Pass(res.test_type, res.orig_expr, nothing, res.value, res.source, res.message_only)
     end
     return res
 end
