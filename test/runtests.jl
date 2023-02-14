@@ -21,4 +21,10 @@ if VERSION.major == 1 && VERSION.minor == 5
 end
 include("regex-tests.jl")
 
+@testset "ENV variable" begin
+    @test  !haskey(ENV, "XUNIT_RUNTESTS")
+    XUnit.runtests("test_env_variable.jl")
+    @test  !haskey(ENV, "XUNIT_RUNTESTS")
+end
+
 end
