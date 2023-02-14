@@ -811,8 +811,10 @@ function runtests_return_state(fun::Function, depth::Int64=typemax(Int64), args.
 end
 
 function runtests(fun::Function, depth::Int64=typemax(Int64), args...)
-    (fn_res, state) = runtests_return_state(fun, depth, args...)
-    return fn_res
+    withenv("XUNIT_RUNTESTS" => "true") do
+        (fn_res, state) = runtests_return_state(fun, depth, args...)
+        return fn_res
+    end
 end
 
 """
